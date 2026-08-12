@@ -1,34 +1,29 @@
-import json
-from typing import Any, Dict, List
+import random
 
-class DataHandler:
-    def __init__(self, data: List[Dict[str, Any]]):
-        self.data = data
+class GameHandler:
+    def __init__(self, players):
+        self.players = players
+        self.current_round = 0
 
-    def filter_data(self, key: str, value: Any) -> List[Dict[str, Any]]:
-        return [item for item in self.data if item.get(key) == value]
+    def start_game(self):
+        print(f"Starting game with {len(self.players)} players...")
+        self.play_rounds()
 
-    def to_json(self) -> str:
-        return json.dumps(self.data, indent=4)
+    def play_rounds(self):
+        while self.current_round < 5:
+            self.current_round += 1
+            self.play_round()
 
-    def from_json(self, json_str: str) -> None:
-        self.data = json.loads(json_str)
+    def play_round(self):
+        print(f"Round {self.current_round}")
+        for player in self.players:
+            score = self.roll_dice()
+            print(f"{player} rolled a {score}")
 
-    def sort_data(self, key: str, reverse: bool = False) -> List[Dict[str, Any]]:
-        return sorted(self.data, key=lambda x: x[key], reverse=reverse)
+    def roll_dice(self):
+        return random.randint(1, 6)
 
-# Example Usage:
 if __name__ == '__main__':
-    example_data = [
-        {'name': 'Alice', 'age': 30},
-        {'name': 'Bob', 'age': 25},
-        {'name': 'Charlie', 'age': 35}
-    ]
-
-    handler = DataHandler(example_data)
-    filtered = handler.filter_data('age', 30)
-    print('Filtered Data:', filtered)
-    sorted_data = handler.sort_data('age')
-    print('Sorted Data:', sorted_data)
-    json_output = handler.to_json()
-    print('JSON Output:', json_output)
+    players = ["Alice", "Bob", "Charlie"]
+    game = GameHandler(players)
+    game.start_game()
