@@ -1,20 +1,33 @@
-import logging
-from logging.handlers import RotatingFileHandler
+import json
+import os
+import datetime
 
-def setup_logger(log_file='game.log', max_bytes=5*1024*1024, backup_count=5):
-    logger = logging.getLogger('game_logger')
-    logger.setLevel(logging.DEBUG)
-    handler = RotatingFileHandler(log_file, maxBytes=max_bytes, backupCount=backup_count)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-    return logger
+class GameLogger:
+    def __init__(self, game_name):
+        self.game_name = game_name
+        self.log_file = f'{game_name}_log.json'
+        self.logs = []
+        self.load_logs()
 
-# Example Usage
-if __name__ == '__main__':
-    log = setup_logger()
-    log.debug('This is a debug message')
-    log.info('Game has started')
-    log.warning('This is a warning message')
-    log.error('An error has occurred')
-    log.critical('Critical issue!')
+    def load_logs(self):
+        if os.path.exists(self.log_file):
+            with open(self.log_file, 'r') as file:
+                self.logs = json.load(file)
+
+    def log_event(self, event_type, message):
+        timestamp = datetime.datetime.now().isoformat()
+        log_entry = {'timestamp': timestamp, 'event_type': event_type, 'message': message}
+        self.logs.append(log_entry)
+        self.save_logs()
+
+    def save_logs(self):
+        with open(self.log_file, 'w') as file:
+            json.dump(self.logs, file, indent=4)
+
+    def get_logs(self):
+        return self.logs
+
+logger = GameLogger('MyCoolGame')
+
+logger.log_event('INFO', 'Game started!')
+logger.log_event('ERROR', 'An unexpected error occurred.')
