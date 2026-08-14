@@ -1,29 +1,30 @@
+import time
 import random
+import requests
 
-class GameHandler:
-    def __init__(self, players):
-        self.players = players
-        self.current_round = 0
+class NetworkError(Exception):
+    pass
 
-    def start_game(self):
-        print(f"Starting game with {len(self.players)} players...")
-        self.play_rounds()
+def retry(func, retries=3, delay=2, backoff=2):
+    for i in range(retries):
+        try:
+            return func()
+        except NetworkError as e:
+            print(f'Attempt {i + 1} failed: {e}')
+            time.sleep(delay)
+            delay *= backoff
+    raise NetworkError('All retry attempts failed')
 
-    def play_rounds(self):
-        while self.current_round < 5:
-            self.current_round += 1
-            self.play_round()
-
-    def play_round(self):
-        print(f"Round {self.current_round}")
-        for player in self.players:
-            score = self.roll_dice()
-            print(f"{player} rolled a {score}")
-
-    def roll_dice(self):
-        return random.randint(1, 6)
+def fetch_data(url):
+    response = requests.get(url)
+    if response.status_code != 200:
+        raise NetworkError(f'Error fetching data: {response.status_code}')
+    return response.json()
 
 if __name__ == '__main__':
-    players = ["Alice", "Bob", "Charlie"]
-    game = GameHandler(players)
-    game.start_game()
+    url = 'https://api.example.com/data'
+    try:
+        data = retry(lambda: fetch_data(url))
+        print('Fetched data:', data)
+    except NetworkError as e:
+        print(f'Final error: {e}')
