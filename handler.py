@@ -1,38 +1,32 @@
-import random
 import json
+from typing import Dict, Any
 
-class GameHandler:
-    def __init__(self):
-        self.players = []
-        self.scoreboard = {}
+class GameDataHandler:
+    def __init__(self, data: Dict[str, Any]) -> None:
+        self.data = data
 
-    def add_player(self, player_name):
-        if player_name not in self.players:
-            self.players.append(player_name)
-            self.scoreboard[player_name] = 0
+    def get_player_score(self, player_id: str) -> int:
+        player_data = self.data.get(player_id, {})
+        return player_data.get('score', 0)
+
+    def update_player_score(self, player_id: str, score: int) -> None:
+        if player_id in self.data:
+            self.data[player_id]['score'] = score
         else:
-            raise ValueError(f'Player {player_name} already exists.')
+            self.data[player_id] = {'score': score}
 
-    def update_score(self, player_name, points):
-        if player_name in self.players:
-            self.scoreboard[player_name] += points
-        else:
-            raise ValueError(f'Player {player_name} not found.')
+    def save_data_to_file(self, filename: str) -> None:
+        with open(filename, 'w') as file:
+            json.dump(self.data, file, indent=4)
 
-    def get_winner(self):
-        if not self.players:
-            raise ValueError('No players to determine a winner.')
-        return max(self.scoreboard, key=self.scoreboard.get)
+    @staticmethod
+    def load_data_from_file(filename: str) -> Dict[str, Any]:
+        with open(filename, 'r') as file:
+            return json.load(file)
 
-    def save_game_state(self, filename):
-        with open(filename, 'w') as f:
-            json.dump(self.scoreboard, f)
-
-    def load_game_state(self, filename):
-        with open(filename, 'r') as f:
-            self.scoreboard = json.load(f)
-            self.players = list(self.scoreboard.keys())
-
-    def random_event(self):
-        event_outcome = random.choice(['bonus', 'penalty'])
-        return event_outcome
+# Example usage:
+if __name__ == '__main__':
+    game_data = GameDataHandler.load_data_from_file('game_data.json')
+    handler = GameDataHandler(game_data)
+    handler.update_player_score('player1', 50)
+    handler.save_data_to_file('updated_game_data.json')
