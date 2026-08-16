@@ -1,42 +1,27 @@
+import time
 import random
+import requests
 
-class Game:
-    def __init__(self):
-        self.player_score = 0
-        self.computer_score = 0
+class RetryException(Exception):
+    pass
 
-    def play_round(self, player_choice):
-        valid_choices = ['rock', 'paper', 'scissors']
-        if player_choice not in valid_choices:
-            raise ValueError('Invalid choice! Choose rock, paper, or scissors.')
-
-        computer_choice = random.choice(valid_choices)
-        print(f'Computer chose: {computer_choice}')
-
-        if (player_choice == computer_choice):
-            return 'Draw'
-        elif (player_choice == 'rock' and computer_choice == 'scissors') or  \
-             (player_choice == 'paper' and computer_choice == 'rock') or  \
-             (player_choice == 'scissors' and computer_choice == 'paper'):
-            self.player_score += 1
-            return 'Player wins'
-        else:
-            self.computer_score += 1
-            return 'Computer wins'
-
-    def get_scores(self):
-        return {'Player Score': self.player_score, 'Computer Score': self.computer_score}
-
-if __name__ == '__main__':
-    game = Game()
-    while True:
-        user_input = input('Enter rock, paper, or scissors (or type exit): ').lower()
-        if user_input == 'exit':
-            print('Thanks for playing!')
-            break
+def retry_request(url, max_retries=3, delay=1):
+    attempts = 0
+    while attempts < max_retries:
         try:
-            result = game.play_round(user_input)
-            print(result)
-            print(game.get_scores())
-        except ValueError as e:
-            print(e)
+            response = requests.get(url)
+            response.raise_for_status()  # Raise an error for bad responses
+            return response.json()  # Assuming we expect JSON response
+        except (requests.ConnectionError, requests.Timeout) as e:
+            attempts += 1
+            if attempts >= max_retries:
+                raise RetryException(f'Request failed after {max_retries} attempts: {e}')
+            wait_time = delay * (2 ** attempts) + random.uniform(0, 1)
+            time.sleep(wait_time)  # Exponential backoff with jitter
+        except requests.HTTPError as e:
+            raise RetryException(f'HTTP error occurred: {e}')
+    return None
+
+# Example usage
+# result = retry_request('https://api.example.com/data')
+# print(result)
