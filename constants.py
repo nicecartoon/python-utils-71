@@ -1,26 +1,28 @@
-import time
-import random
+DEFAULTS = {
+    'difficulty': 'normal',
+    'volume': 50,
+    'fullscreen': True,
+    'resolution': (1920, 1080)
+}
 
-MAX_RETRIES = 5
-DELAY_BASE = 1
-DELAY_JITTER = 0.5
+class ConfigLoader:
+    def __init__(self, user_config=None):
+        self.config = DEFAULTS.copy()  # Start with defaults
+        if user_config:
+            self.load_user_config(user_config)
 
-class RetryFailedException(Exception):
-    pass
+    def load_user_config(self, user_config):
+        for key, value in user_config.items():
+            if key in self.config:
+                self.config[key] = value
 
+    def get(self, key):
+        return self.config.get(key, None)
 
-def exponential_backoff(retry_attempt):
-    delay = DELAY_BASE * (2 ** retry_attempt)
-    jitter = random.uniform(0, DELAY_JITTER)
-    return delay + jitter
-
-
-def retry_network_operation(func, *args, **kwargs):
-    for attempt in range(MAX_RETRIES):
-        try:
-            return func(*args, **kwargs)
-        except Exception as e:
-            if attempt < MAX_RETRIES - 1:
-                time.sleep(exponential_backoff(attempt))
-            else:
-                raise RetryFailedException(f"Operation failed after {MAX_RETRIES} attempts") from e
+if __name__ == '__main__':
+    user_preferences = {
+        'volume': 75,
+        'resolution': (1280, 720)
+    }
+    config = ConfigLoader(user_preferences)
+    print(config.config)  # Displays merged configuration
