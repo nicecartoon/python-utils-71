@@ -1,24 +1,39 @@
 import time
-import numpy as np
+import random
+import requests
 
-class DataProcessor:
-    def __init__(self, data):
-        self.data = data
+class NetworkError(Exception):
+    pass
 
-    def process_data(self):
-        start_time = time.time()
-        processed = self._optimize_and_compute(self.data)
-        duration = time.time() - start_time
-        print(f'Processing time: {duration:.4f} seconds')
-        return processed
+class Retry:
+    def __init__(self, attempts=3, delay=2, backoff=2):
+        self.attempts = attempts
+        self.delay = delay
+        self.backoff = backoff
 
-    def _optimize_and_compute(self, data):
-        # Using numpy for vectorized operations
-        data_array = np.array(data)
-        return np.sqrt(data_array)  # example operation
+    def __call__(self, func):
+        def wrapper(*args, **kwargs):
+            for attempt in range(self.attempts):
+                try:
+                    return func(*args, **kwargs)
+                except (requests.exceptions.RequestException, NetworkError) as e:
+                    if attempt < self.attempts - 1:
+                        time.sleep(self.delay)
+                        self.delay *= self.backoff
+                    else:
+                        raise
+        return wrapper
+
+@Retry(attempts=5, delay=1)
+def fetch_data(url):
+    response = requests.get(url)
+    if response.status_code != 200:
+        raise NetworkError(f'Failed to fetch data, status code: {response.status_code}')
+    return response.json()
 
 if __name__ == '__main__':
-    data = range(1, 1000000)
-    processor = DataProcessor(data)
-    result = processor.process_data()
-    print(result[:10])  # display first 10 results
+    try:
+        data = fetch_data('https://api.example.com/data')
+        print(data)
+    except NetworkError as e:
+        print(f'Error: {e}')
