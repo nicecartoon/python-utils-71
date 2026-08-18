@@ -1,29 +1,23 @@
-from typing import Any, Dict
+import re
 
+def validate_input(user_input):
+    if not isinstance(user_input, str):
+        raise ValueError('Input must be a string')
+    if len(user_input) < 3:
+        raise ValueError('Input must be at least 3 characters long')
+    if len(user_input) > 20:
+        raise ValueError('Input must not exceed 20 characters')
+    if not re.match('^[A-Za-z0-9_]+$', user_input):
+        raise ValueError('Input can only contain alphanumeric characters and underscores')
+    return True
 
-class Validator:
-    """Class to validate input data types and structures."""
-
-    @staticmethod
-    def is_non_empty_string(value: Any) -> bool:
-        """Check if the value is a non-empty string."""
-        return isinstance(value, str) and len(value) > 0
-
-    @staticmethod
-    def is_positive_integer(value: Any) -> bool:
-        """Check if the value is a positive integer."""
-        return isinstance(value, int) and value > 0
-
-    @staticmethod
-    def is_valid_email(email: str) -> bool:
-        """Validate the format of an email address."""
-        import re
-        email_regex = r'^[\w\.-]+@[\w\.-]+\.\w+$'
-        return re.match(email_regex, email) is not None
-
-    @staticmethod
-    def validate_user_data(user_data: Dict[str, Any]) -> bool:
-        """Validate user data against required fields."""
-        return (Validator.is_non_empty_string(user_data.get('username')) and 
-                Validator.is_valid_email(user_data.get('email')) and 
-                Validator.is_positive_integer(user_data.get('age')))
+if __name__ == '__main__':
+    while True:
+        try:
+            user_input = input('Enter your gamer tag: ')
+            validate_input(user_input)
+            print(f'Accepted: {user_input}')
+            break
+        except ValueError as e:
+            print(f'Error: {e}')
+            continue
