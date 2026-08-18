@@ -1,30 +1,27 @@
-import os
 import json
+import os
 
-class Config:
+class GameConfig:
     def __init__(self, config_file='config.json'):
         self.config_file = config_file
-        self.settings = self.load_config()
+        self.config_data = self.load_config()
 
     def load_config(self):
-        if not os.path.exists(self.config_file):
-            raise FileNotFoundError(f"Configuration file '{self.config_file}' not found.")
+        if not os.path.isfile(self.config_file):
+            raise FileNotFoundError(f'Configuration file {self.config_file} does not exist.')
         with open(self.config_file, 'r') as file:
             return json.load(file)
 
-    def get(self, key, default=None):
-        return self.settings.get(key, default)
+    def get_setting(self, key, default=None):
+        return self.config_data.get(key, default)
 
-    def set(self, key, value):
-        self.settings[key] = value
+    def set_setting(self, key, value):
+        self.config_data[key] = value
         self.save_config()
 
     def save_config(self):
         with open(self.config_file, 'w') as file:
-            json.dump(self.settings, file, indent=4)    
+            json.dump(self.config_data, file, indent=4)
 
-if __name__ == '__main__':
-    config = Config()
-    print(config.get('player_name', 'Guest'))
-    config.set('player_name', 'Player1')
-    print(config.get('player_name'))
+config = GameConfig()  # Instance of GameConfig for easy access
+
