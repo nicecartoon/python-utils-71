@@ -1,40 +1,27 @@
 from typing import Dict, Any
 
-class Config:
-    """
-    A class to manage game configuration settings.
-    """
+class GameConfig:
+    """A class to manage game configuration settings."""
     def __init__(self, settings: Dict[str, Any]) -> None:
-        """
-        Initializes the configuration with the given settings.
-        
-        :param settings: A dictionary with configuration settings.
-        """
+        """Initialize with a settings dictionary."""
         self.settings = settings
 
-    def get(self, key: str, default: Any = None) -> Any:
-        """
-        Retrieve a setting by key, returning default if key not found.
-        
-        :param key: The key of the setting to retrieve.
-        :param default: The value to return if key is not found.
-        :return: The setting value or the default.
-        """
-        return self.settings.get(key, default)
+    def get_setting(self, key: str) -> Any:
+        """Retrieve a specific setting value by key."""
+        return self.settings.get(key, None)
 
-    def set(self, key: str, value: Any) -> None:
-        """
-        Set a configuration setting by key.
-        
-        :param key: The key of the setting to set.
-        :param value: The value to assign to the setting.
-        """
+    def set_setting(self, key: str, value: Any) -> None:
+        """Set a specific setting value by key."""
         self.settings[key] = value
 
-    def all_settings(self) -> Dict[str, Any]:
-        """
-        Return all settings as a dictionary.
-        
-        :return: A dictionary of all settings.
-        """
-        return self.settings.copy()
+    def __repr__(self) -> str:
+        """Return a string representation of the settings."""
+        return f'GameConfig({self.settings})'
+
+# Example usage
+if __name__ == '__main__':
+    config = GameConfig(settings={'resolution': '1920x1080', 'volume': 75})
+    print(config)
+    config.set_setting('volume', 85)
+    print(config.get_setting('volume'))
+    
