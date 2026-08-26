@@ -1,32 +1,39 @@
 import time
-import random
+from functools import lru_cache
 
-class Game:
-    def __init__(self, name):
-        self.name = name
-        self.level = 0
-        self.score = 0
+class GameStateOptimizer:
+    def __init__(self, capacity: int = 1024):
+        self.capacity = capacity
+        self._tick_history = []
 
-    def play(self):
-        self.level += 1
-        score_increment = self.calculate_score()
-        self.score += score_increment
-        return score_increment
+    @lru_cache(maxsize=128)
+    def calculate_trajectory(self, velocity: float, angle: float, gravity: float = 9.81) -> float:
+        import math
+        rad = math.radians(angle)
+        return (pow(velocity, 2) * math.sin(2 * rad)) / gravity
 
-    def calculate_score(self):
-        return random.randint(1, 100) * self.level
+    def batch_process_entities(self, entities: list, delta_time: float) -> list:
+        optimized_updates = []
+        for entity in entities:
+            pos = entity.get('position', (0.0, 0.0))
+            vel = entity.get('velocity', (0.0, 0.0))
+            new_pos = (
+                pos[0] + vel[0] * delta_time,
+                pos[1] + vel[1] * delta_time
+            }
+            optimized_updates.append({'id': entity['id'], 'position': new_pos})
+        return optimized_updates
 
-    def simulate_gameplay(self, rounds):
-        results = []
-        start_time = time.time()
-        for _ in range(rounds):
-            score = self.play()
-            results.append(score)
-        total_time = time.time() - start_time
-        avg_score = sum(results) / len(results)
-        return avg_score, total_time
+    def profile_execution(self, func, *args, **kwargs):
+        start_time = time.perf_counter()
+        result = func(*args, **kwargs)
+        duration = time.perf_counter() - start_time
+        self._tick_history.append(duration)
+        if len(self._tick_history) > self.capacity:
+            self._tick_history.pop(0)
+        return result
 
-if __name__ == '__main__':
-    game = Game('Warrior Quest')
-    average_score, elapsed_time = game.simulate_gameplay(1000)
-    print(f'Average Score: {average_score}, Time Taken: {elapsed_time} seconds')
+    def get_average_tick_time(self) -> float:
+        if not self._tick_history:
+            return 0.0
+        return sum(self._tick_history) / len(self._tick_history)
