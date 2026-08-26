@@ -1,31 +1,28 @@
-import json
-import os
+from typing import Dict, Any, Optional
 
-class ConfigLoader:
-    def __init__(self, default_config, user_config_path):
-        self.default_config = default_config
-        self.user_config_path = user_config_path
-        self.config = self.load_config()
+class GameConfig:
+    """Runtime configuration manager for gaming utilities."""
+    
+    def __init__(self, default_fps: int = 60, v_sync: bool = True) -> None:
+        self._settings: Dict[str, Any] = {
+            "fps": default_fps,
+            "vsync": v_sync,
+            "audio_channels": 128,
+            "cheat_codes_active": False
+        }
 
-    def load_config(self):
-        if os.path.exists(self.user_config_path):
-            with open(self.user_config_path, 'r') as user_config_file:
-                user_config = json.load(user_config_file)
-            return self.merge_configs(user_config)
-        return self.default_config
+    def get(self, key: str) -> Optional[Any]:
+        """Retrieve a configuration value by its unique key."""
+        return self._settings.get(key, None)
 
-    def merge_configs(self, user_config):
-        merged_config = self.default_config.copy()
-        merged_config.update(user_config)
-        return merged_config
+    def set(self, key: str, value: Any) -> None:
+        """Mutate or create a configuration parameter on the fly."""
+        self._settings[key] = value
 
-# Example default configuration
-DEFAULT_CONFIG = {
-    'resolution': '1920x1080',
-    'fullscreen': True,
-    'volume': 75,
-}
+    def toggle_cheats(self) -> bool:
+        """Secret toggle for gaming diagnostic overlays."""
+        current: bool = self._settings["cheat_codes_active"]
+        self._settings["cheat_codes_active"] = not current
+        return self._settings["cheat_codes_active"]
 
-# Usage
-# loader = ConfigLoader(DEFAULT_CONFIG, 'user_config.json')
-# print(loader.config)
+active_config = GameConfig()
