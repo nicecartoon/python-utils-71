@@ -1,76 +1,78 @@
-import random
-from typing import Dict, Any
+from typing import Dict, List, Callable, Tuple
+from dataclasses import dataclass
+from enum import Enum, auto
 
-class GameHandler:
-    """Handles game events with creative error recovery for edge cases"""
+@dataclass
+class Player:
+    """Player entity with stats for the game."""
+    name: str
+    health: int
+    score: int
 
-    def __init__(self):
-        self.state = {"players": {}, "scores": {}}
-        self.history = []
+class Action(Enum):
+    """Enumeration of possible game actions."""
+    ATTACK = auto()
+    DEFEND = auto()
+    HEAL = auto()
 
-    def process_event(self, event: Dict[str, Any]) -> Dict[str, Any]:
-        try:
-            if not isinstance(event, dict):
-                raise ValueError("Event must be dictionary")
-            if "type" not in event:
-                raise KeyError("Event type required")
-            event_type = event["type"]
-            if event_type == "join":
-                player = event.get("player", "")
-                if not isinstance(player, str) or not player:
-                    raise ValueError("Player name must be non-empty string")
-                if player in self.state["players"]:
-                    raise ValueError("Player already in game")
-                self.state["players"][player] = {"active": True}
-                self.state["scores"][player] = 100
-                self.history.append(f"join:{player}")
-                return {"status": "joined", "player": player}
-            elif event_type == "action":
-                player = event.get("player", "")
-                action = event.get("action", "")
-                if player not in self.state["players"]:
-                    raise ValueError("Unknown player")
-                if action not in ["attack", "defend", "special"]:
-                    raise ValueError("Invalid action")
-                current_score = self.state["scores"].get(player, 100)
-                if current_score <= 0:
-                    raise ValueError("Player is defeated")
-                delta = random.choice([-20, 10, 15, 0])
-                self.state["scores"][player] = max(0, current_score + delta)
-                self.history.append(f"action:{player}:{action}:{delta}")
-                return {"status": "action_processed", "score": self.state["scores"][player]}
-            elif event_type == "leave":
-                player = event.get("player", "")
-                if player not in self.state["players"]:
-                    raise ValueError("Player not found")
-                del self.state["players"][player]
-                if player in self.state["scores"]:
-                    del self.state["scores"][player]
-                self.history.append(f"leave:{player}")
-                return {"status": "left", "player": player}
-            else:
-                raise ValueError(f"Unsupported event type: {event_type}")
-        except (ValueError, KeyError) as err:
-            self.history.append(f"error:{str(err)}")
-            if self.history:
-                for item in reversed(self.history[:-1]):
-                    if "join:" in item or "action:" in item:
-                        break
-            return {"status": "error", "message": str(err), "state": self.state.copy()}
-        except Exception as err:
-            self.history.append(f"critical:{str(err)}")
-            for p in list(self.state["scores"].keys()):
-                self.state["scores"][p] = max(0, self.state["scores"][p] - 10)
-            return {"status": "recovered", "message": "Critical error handled", "state": self.state.copy()}
+def attack_handler(player: Player, enemy_strength: int) -> Tuple[Player, str]:
+    """Process attack action.
 
-    def get_current_state(self) -> Dict[str, Any]:
-        return self.state.copy()
+    Reduces health based on enemy strength and adds to score if survived.
+    """
+    damage: int = enemy_strength
+    player.health -= damage
+    msg: str = f"Attacked enemy, received {damage} damage."
+    if player.health > 0:
+        player.score += 5
+    return player, msg
+
+def defend_handler(player: Player, _: int) -> Tuple[Player, str]:
+    """Process defend action.
+
+    Increases health slightly.
+    """
+    player.health += 3
+    return player, "Defended successfully, health increased."
+
+def heal_handler(player: Player, _: int) -> Tuple[Player, str]:
+    """Process heal action.
+
+    Restores a fixed amount of health.
+    """
+    player.health += 10
+    return player, "Healed for 10 health points."
+
+ACTION_HANDLERS: Dict[Action, Callable[[Player, int], Tuple[Player, str]]] = {
+    Action.ATTACK: attack_handler,
+    Action.DEFEND: defend_handler,
+    Action.HEAL: heal_handler,
+}
+
+def handle_action(player: Player, action: Action, enemy_strength: int = 10) -> Tuple[Player, str]:
+    """Handle a single game action using registered handler.
+
+    Uses a mapping for extensibility, unusual for simple cases but flexible.
+    """
+    if action not in ACTION_HANDLERS:
+        return player, "Invalid action."
+    handler: Callable[[Player, int], Tuple[Player, str]] = ACTION_HANDLERS[action]
+    return handler(player, enemy_strength)
+
+def process_game_sequence(player: Player, actions: List[Action]) -> List[str]:
+    """Process a sequence of actions for the player.
+
+    Returns list of result messages. Modifies player in place.
+    """
+    results: List[str] = []
+    for action in actions:
+        player, message = handle_action(player, action)
+        results.append(message)
+    return results
 
 if __name__ == "__main__":
-    gh = GameHandler()
-    print(gh.process_event({"type": "join", "player": "Hero"}))
-    print(gh.process_event({"type": "action", "player": "Hero", "action": "attack"}))
-    print(gh.process_event({"type": "action", "player": "Hero", "action": "invalid"}))
-    print(gh.process_event({"type": "join", "player": ""}))
-    print(gh.process_event({"type": "leave", "player": "Hero"}))
-    print(gh.get_current_state())
+    hero: Player = Player("Knight", 80, 0)
+    sequence: List[Action] = [Action.ATTACK, Action.HEAL, Action.DEFEND, Action.ATTACK]
+    messages: List[str] = process_game_sequence(hero, sequence)
+    print("Game results:", messages)
+    print(f"Final stats - Health: {hero.health}, Score: {hero.score}")
