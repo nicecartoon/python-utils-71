@@ -1,28 +1,41 @@
-from typing import Dict, Any, Optional
+import os
+import json
+import logging
 
-class GameConfig:
-    """Runtime configuration manager for gaming utilities."""
-    
-    def __init__(self, default_fps: int = 60, v_sync: bool = True) -> None:
-        self._settings: Dict[str, Any] = {
-            "fps": default_fps,
-            "vsync": v_sync,
-            "audio_channels": 128,
-            "cheat_codes_active": False
-        }
+class ConfigError(Exception):
+    pass
 
-    def get(self, key: str) -> Optional[Any]:
-        """Retrieve a configuration value by its unique key."""
-        return self._settings.get(key, None)
+def load_game_config(path):
+    try:
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Config missing: {path}")
+        
+        with open(path, 'r') as f:
+            data = json.load(f)
+            
+        if not isinstance(data, dict):
+            raise TypeError("Config structure malformed")
+            
+        return {k: v for k, v in data.items() if v is not None}
 
-    def set(self, key: str, value: Any) -> None:
-        """Mutate or create a configuration parameter on the fly."""
-        self._settings[key] = value
+    except (json.JSONDecodeError, FileNotFoundError, TypeError) as e:
+        logging.error(f"Configuration failure: {e}")
+        return {"resolution": "1920x1080", "vsync": True, "fallback": True}
 
-    def toggle_cheats(self) -> bool:
-        """Secret toggle for gaming diagnostic overlays."""
-        current: bool = self._settings["cheat_codes_active"]
-        self._settings["cheat_codes_active"] = not current
-        return self._settings["cheat_codes_active"]
+def validate_settings(settings):
+    keys = ['resolution', 'vsync']
+    try:
+        missing = [k for k in keys if k not in settings]
+        if missing:
+            raise ConfigError(f"Missing critical keys: {missing}")
+        
+        if 'x' not in settings['resolution']:
+            raise ValueError("Invalid resolution format")
+            
+        return True
+    except (ConfigError, ValueError) as e:
+        logging.warning(f"Validation bypass triggered: {e}")
+        return False
 
-active_config = GameConfig()
+settings = load_game_config('settings.json')
+ready = validate_settings(settings)
