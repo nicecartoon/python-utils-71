@@ -1,40 +1,38 @@
-import collections
-import math
+import functools
+from typing import Callable, Any
 
-class XPScaleOptimizer:
-    def __init__(self, base_xp=100, exponent=1.5):
-        self.base = base_xp
-        self.exp = exponent
-        self._memo = {}
+def gaming_pipeline(func: Callable) -> Callable:
+    @functools.wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            print(f"[!] engine crash in {func.__name__}: {e}")
+            return None
+    return wrapper
 
-    def calculate_level_requirements(self, max_level):
-        levels = range(1, max_level + 1)
-        return {lvl: int(self.base * (lvl ** self.exp)) for lvl in levels}
+class EntityProcessor:
+    def __init__(self, entities: list) -> None:
+        self._registry = {e['id']: e for e in entities}
 
-    def flatten_combat_stats(self, data_packet):
-        flat_data = {}
-        def recurse(d, prefix=''):
-            for k, v in d.items():
-                new_key = f"{prefix}.{k}" if prefix else k
-                if isinstance(v, dict):
-                    recurse(v, new_key)
-                else:
-                    flat_data[new_key] = v
-        recurse(data_packet)
-        return flat_data
+    @gaming_pipeline
+    def update_stats(self, entity_id: str, delta: dict) -> None:
+        target = self._registry.get(entity_id)
+        if target:
+            for key, val in delta.items():
+                target[key] = target.get(key, 0) + val
 
-    def balance_loot_drops(self, items, weights):
-        pool = []
-        for item, weight in zip(items, weights):
-            pool.extend([item] * int(weight * 100))
-        return collections.Counter(pool)
+    def get_active_entities(self) -> list:
+        return sorted(
+            self._registry.values(), 
+            key=lambda x: x.get('power', 0), 
+            reverse=True
+        )
 
-def process_game_state(state):
-    optimizer = XPScaleOptimizer()
-    stats = optimizer.flatten_combat_stats(state)
-    avg_power = sum(stats.values()) / max(1, len(stats))
-    return {
-        'status': 'optimized',
-        'power_index': math.ceil(avg_power),
-        'payload_size': len(stats)
-    }
+    def flush_registry(self) -> None:
+        self._registry = {}
+
+if __name__ == "__main__":
+    proc = EntityProcessor([{'id': 'player1', 'power': 10}])
+    proc.update_stats('player1', {'power': 5})
+    print(proc.get_active_entities())
