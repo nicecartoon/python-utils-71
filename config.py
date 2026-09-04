@@ -1,41 +1,34 @@
-import os
 import json
-import logging
+import os
+from typing import Any, Dict
 
-class ConfigError(Exception):
-    pass
+class ConfigLoader:
+    def __init__(self, defaults: Dict[str, Any], filepath: str = 'settings.json'):
+        self.filepath = filepath
+        self.data = defaults.copy()
+        self._load_file()
 
-def load_game_config(path):
-    try:
-        if not os.path.exists(path):
-            raise FileNotFoundError(f"Config missing: {path}")
-        
-        with open(path, 'r') as f:
-            data = json.load(f)
-            
-        if not isinstance(data, dict):
-            raise TypeError("Config structure malformed")
-            
-        return {k: v for k, v in data.items() if v is not None}
+    def _load_file(self) -> None:
+        if os.path.exists(self.filepath):
+            try:
+                with open(self.filepath, 'r') as f:
+                    user_data = json.load(f)
+                    self.data.update(user_data)
+            except (json.JSONDecodeError, IOError):
+                pass
 
-    except (json.JSONDecodeError, FileNotFoundError, TypeError) as e:
-        logging.error(f"Configuration failure: {e}")
-        return {"resolution": "1920x1080", "vsync": True, "fallback": True}
+    def __getattr__(self, name: str) -> Any:
+        if name in self.data:
+            return self.data[name]
+        raise AttributeError(f'Setting {name} not found in configuration')
 
-def validate_settings(settings):
-    keys = ['resolution', 'vsync']
-    try:
-        missing = [k for k in keys if k not in settings]
-        if missing:
-            raise ConfigError(f"Missing critical keys: {missing}")
-        
-        if 'x' not in settings['resolution']:
-            raise ValueError("Invalid resolution format")
-            
-        return True
-    except (ConfigError, ValueError) as e:
-        logging.warning(f"Validation bypass triggered: {e}")
-        return False
+    def __getitem__(self, key: str) -> Any:
+        return self.data.get(key)
 
-settings = load_game_config('settings.json')
-ready = validate_settings(settings)
+    def persist(self) -> None:
+        with open(self.filepath, 'w') as f:
+            json.dump(self.data, f, indent=4)
+
+    def update_settings(self, new_data: Dict[str, Any]) -> None:
+        self.data.update(new_data)
+        self.persist()
