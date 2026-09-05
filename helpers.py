@@ -1,31 +1,38 @@
 import time
 import random
-import functools
+from functools import wraps
+from typing import Callable, Any, TypeVar
 
-def retry_operation(max_attempts=3, base_delay=1.0, jitter=0.5):
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            attempts = 0
-            while attempts < max_attempts:
+T = TypeVar('T')
+
+class GameServerUnreachable(Exception):
+    """Exception raised when game server connection drops permanently."""
+    pass
+
+def retry_network_op(
+    max_respawns: int = 3,
+    cooldown_sec: float = 0.2,
+    backoff_multiplier: float = 2.0,
+    ping_jitter: bool = True
+) -> Callable:
+    """Retries game network operations with exponential cooldown and ping jitter."""
+    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+        @wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> T:
+            delay = cooldown_sec
+            for attempt in range(1, max_respawns + 2):
                 try:
                     return func(*args, **kwargs)
-                except Exception as e:
-                    attempts += 1
-                    if attempts == max_attempts:
-                        raise e
-                    sleep_time = (base_delay * (2 ** (attempts - 1))) + (random.random() * jitter)
-                    time.sleep(sleep_time)
+                except Exception as exc:
+                    if attempt > max_respawns:
+                        raise GameServerUnreachable(
+                            f"Operation '{func.__name__}' failed after {max_respawns} retries"
+                        ) from exc
+                    
+                    jitter = random.uniform(0.85, 1.15) if ping_jitter else 1.0
+                    sleep_duration = delay * jitter
+                    time.sleep(sleep_duration)
+                    delay *= backoff_multiplier
+            raise GameServerUnreachable("Unexpected retry exhaustion")
         return wrapper
     return decorator
-
-@retry_operation(max_attempts=5)
-def fetch_game_data(url):
-    # Simulate volatile network connection
-    if random.random() < 0.7:
-        raise ConnectionError("Server lag spike detected")
-    return {"status": "ready", "payload": "data_packet_71"}
-
-if __name__ == '__main__':
-    data = fetch_game_data("https://api.game-node-71.io")
-    print(f"Successfully retrieved: {data}")
