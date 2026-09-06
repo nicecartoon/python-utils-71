@@ -1,45 +1,25 @@
-import functools
-import time
-from typing import Callable, Any
+from typing import List, Union, Callable, Any
 
-CACHE_STORAGE: dict[tuple, Any] = {}
+def aggregate_xp(levels: List[int], multiplier: float = 1.0) -> int:
+    """Calculates total experience points from a list of player levels."""
+    return int(sum(level * 100 for level in levels) * multiplier)
 
-def memoize_with_ttl(ttl_seconds: int = 60):
-    def decorator(func: Callable):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            key = (func.__name__, args, frozenset(kwargs.items()))
-            now = time.time()
-            if key in CACHE_STORAGE:
-                result, timestamp = CACHE_STORAGE[key]
-                if now - timestamp < ttl_seconds:
-                    return result
-            result = func(*args, **kwargs)
-            CACHE_STORAGE[key] = (result, now)
-            return result
-        return wrapper
-    return decorator
+def sanitize_player_name(name: str) -> str:
+    """Removes non-alphanumeric characters for gaming leaderboard display."""
+    return ''.join(char for char in name if char.isalnum())
 
-class DataStreamOptimizer:
-    __slots__ = ('buffer', 'max_size')
+def apply_buff(stat: float, modifier: Union[int, float], op: Callable[[float, float], float] = lambda a, b: a + b) -> float:
+    """Applies a mathematical operation to a stat value.
     
-    def __init__(self, max_size: int = 1024):
-        self.buffer = []
-        self.max_size = max_size
+    Default operation is addition of the modifier.
+    """
+    return float(op(stat, float(modifier)))
 
-    def batch_process(self, data: Any):
-        self.buffer.append(data)
-        if len(self.buffer) >= self.max_size:
-            processed = self._flush()
-            return processed
-        return None
+class EntityMapper:
+    """Maps raw gaming entities to internal object representation."""
+    def __init__(self, entities: List[Any]) -> None:
+        self.data = {str(i): e for i, e in enumerate(entities)}
 
-    def _flush(self):
-        chunk = list(self.buffer)
-        self.buffer.clear()
-        return chunk
-
-@memoize_with_ttl(ttl_seconds=300)
-def calculate_hitbox_collision(entity_id: int, frame: int) -> bool:
-    # Optimized collision logic for gaming engine frames
-    return (entity_id % 7 + frame % 11) > 15
+    def get_count(self) -> int:
+        """Returns total count of registered entities."""
+        return len(self.data)
