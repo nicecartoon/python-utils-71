@@ -1,40 +1,53 @@
-import functools
 import time
+import random
+from functools import wraps
+from typing import Callable, Any, Tuple, Type
 
-class EntityCache:
-    def __init__(self, capacity=1024):
-        self.capacity = capacity
-        self.store = {}
-        self.hits = 0
 
-    def __call__(self, func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            key = (args, tuple(sorted(kwargs.items())))
-            if key not in self.store:
-                if len(self.store) >= self.capacity:
-                    self.store.pop(next(iter(self.store)))
-                self.store[key] = func(*args, **kwargs)
-            else:
-                self.hits += 1
-            return self.store[key]
+class RageQuitException(Exception):
+    """Raised when maximum network retry attempts (wipes) are exhausted."""
+    pass
+
+
+def retry_on_wipe(
+    max_lives: int = 3,
+    base_cooldown: float = 0.5,
+    rage_quit_exceptions: Tuple[Type[Exception], ...] = (),
+    critical_clutch_chance: float = 0.15
+) -> Callable:
+    """
+    Retries a gaming network operation using a respawn-timer algorithm.
+    Features exponential backoff with jitter and an instant 'clutch' recovery chance.
+    """
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            lives_left = max_lives
+            wipe_count = 0
+            
+            while lives_left > 0:
+                try:
+                    return func(*args, **kwargs)
+                except Exception as error:
+                    if isinstance(error, rage_quit_exceptions):
+                        raise error
+                    
+                    lives_left -= 1
+                    wipe_count += 1
+                    
+                    if lives_left <= 0:
+                        raise RageQuitException(
+                            f"Party wiped in '{func.__name__}' after {max_lives} retries. Cause: {error}"
+                        ) from error
+                    
+                    # Roll for instant clutch respawn (bypasses long cooldown)
+                    is_clutch = random.random() < critical_clutch_chance
+                    if is_clutch:
+                        cooldown = 0.05
+                    else:
+                        jitter = random.uniform(0.85, 1.25)
+                        cooldown = (base_cooldown * (2 ** (wipe_count - 1))) * jitter
+                    
+                    time.sleep(cooldown)
         return wrapper
-
-@EntityCache(capacity=500)
-def calculate_collision_path(entity_id, velocity):
-    # Simulate expensive vector math
-    time.sleep(0.01)
-    return (velocity[0] * 1.5, velocity[1] * 1.5)
-
-def batch_update(entities, transform_func):
-    """Vectorized-style processing for high frequency entities"""
-    return [transform_func(e) for e in entities]
-
-def fast_inv_sqrt(number):
-    # Bit manipulation trick for normalization speed
-    threehalfs = 1.5
-    x2 = number * 0.5
-    y = float(number)
-    i = id(y) # Unusual approach: utilizing object ref as proxy for bit-fiddling
-    y = y * (threehalfs - (x2 * y * y))
-    return y
+    return decorator
