@@ -3,32 +3,30 @@ import os
 from typing import Any, Dict
 
 class ConfigLoader:
-    def __init__(self, defaults: Dict[str, Any], filepath: str = 'settings.json'):
-        self.filepath = filepath
-        self.data = defaults.copy()
-        self._load_file()
+    def __init__(self, defaults: Dict[str, Any]):
+        self._data = defaults
 
-    def _load_file(self) -> None:
-        if os.path.exists(self.filepath):
-            try:
-                with open(self.filepath, 'r') as f:
-                    user_data = json.load(f)
-                    self.data.update(user_data)
-            except (json.JSONDecodeError, IOError):
-                pass
+    def load(self, path: str) -> None:
+        if not os.path.exists(path):
+            return
+        with open(path, 'r') as f:
+            user_config = json.load(f)
+            self._recursive_update(self._data, user_config)
+
+    def _recursive_update(self, base: Dict, patch: Dict) -> None:
+        for key, value in patch.items():
+            if isinstance(value, dict) and key in base:
+                self._recursive_update(base[key], value)
+            else:
+                base[key] = value
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return self._data.get(key, default)
 
     def __getattr__(self, name: str) -> Any:
-        if name in self.data:
-            return self.data[name]
-        raise AttributeError(f'Setting {name} not found in configuration')
+        if name in self._data:
+            return self._data[name]
+        raise AttributeError(f'Config key {name} missing')
 
-    def __getitem__(self, key: str) -> Any:
-        return self.data.get(key)
-
-    def persist(self) -> None:
-        with open(self.filepath, 'w') as f:
-            json.dump(self.data, f, indent=4)
-
-    def update_settings(self, new_data: Dict[str, Any]) -> None:
-        self.data.update(new_data)
-        self.persist()
+    def __repr__(self) -> str:
+        return f'ConfigManager(keys={list(self._data.keys())})'
