@@ -1,53 +1,53 @@
 import time
 import random
-from functools import wraps
-from typing import Callable, Any, Tuple, Type
+from typing import Any, Callable, Dict
 
+class GameStateRegistry:
+    _data: Dict[str, Any] = {}
 
-class RageQuitException(Exception):
-    """Raised when maximum network retry attempts (wipes) are exhausted."""
-    pass
+    @classmethod
+    def register(cls, key: str, value: Any) -> None:
+        cls._data[key] = value
 
+    @classmethod
+    def fetch(cls, key: str, default: Any = None) -> Any:
+        return cls._data.get(key, default)
 
-def retry_on_wipe(
-    max_lives: int = 3,
-    base_cooldown: float = 0.5,
-    rage_quit_exceptions: Tuple[Type[Exception], ...] = (),
-    critical_clutch_chance: float = 0.15
-) -> Callable:
-    """
-    Retries a gaming network operation using a respawn-timer algorithm.
-    Features exponential backoff with jitter and an instant 'clutch' recovery chance.
-    """
-    def decorator(func: Callable) -> Callable:
-        @wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            lives_left = max_lives
-            wipe_count = 0
-            
-            while lives_left > 0:
+    @classmethod
+    def purge(cls) -> None:
+        cls._data.clear()
+
+def retry_logic(attempts: int = 3):
+    def decorator(func: Callable):
+        def wrapper(*args, **kwargs):
+            last_ex = None
+            for i in range(attempts):
                 try:
                     return func(*args, **kwargs)
-                except Exception as error:
-                    if isinstance(error, rage_quit_exceptions):
-                        raise error
-                    
-                    lives_left -= 1
-                    wipe_count += 1
-                    
-                    if lives_left <= 0:
-                        raise RageQuitException(
-                            f"Party wiped in '{func.__name__}' after {max_lives} retries. Cause: {error}"
-                        ) from error
-                    
-                    # Roll for instant clutch respawn (bypasses long cooldown)
-                    is_clutch = random.random() < critical_clutch_chance
-                    if is_clutch:
-                        cooldown = 0.05
-                    else:
-                        jitter = random.uniform(0.85, 1.25)
-                        cooldown = (base_cooldown * (2 ** (wipe_count - 1))) * jitter
-                    
-                    time.sleep(cooldown)
+                except Exception as e:
+                    last_ex = e
+                    time.sleep(0.1 * (i + 1))
+            raise last_ex
         return wrapper
     return decorator
+
+@retry_logic(attempts=2)
+def sync_player_score(player_id: str, score: int) -> bool:
+    success = random.choice([True, False])
+    if not success:
+        raise ConnectionError("Server unreachable")
+    GameStateRegistry.register(f"score_{player_id}", score)
+    return True
+
+def batch_process_entities(entities: list, processor: Callable) -> list:
+    return [processor(e) for e in entities if e is not None]
+
+class SessionManager:
+    def __init__(self, session_id: str):
+        self.sid = session_id
+    
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        GameStateRegistry.purge()
