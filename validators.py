@@ -1,23 +1,36 @@
-import re
+import time
+from typing import Generator, Dict, Any, Tuple
 
-def validate_input(user_input):
-    if not isinstance(user_input, str):
-        raise ValueError('Input must be a string')
-    if len(user_input) < 3:
-        raise ValueError('Input must be at least 3 characters long')
-    if len(user_input) > 20:
-        raise ValueError('Input must not exceed 20 characters')
-    if not re.match('^[A-Za-z0-9_]+$', user_input):
-        raise ValueError('Input can only contain alphanumeric characters and underscores')
-    return True
-
-if __name__ == '__main__':
-    while True:
-        try:
-            user_input = input('Enter your gamer tag: ')
-            validate_input(user_input)
-            print(f'Accepted: {user_input}')
-            break
-        except ValueError as e:
-            print(f'Error: {e}')
+def create_input_validator(min_delay: float = 0.05) -> Generator[Tuple[bool, str], Dict[str, Any], None]:
+    """
+    Creates a stateful game input validator using a coroutine.
+    Validates input rates, screen space coordinates, and key mappings.
+    """
+    last_time: float = 0.0
+    allowed_keys = {"up", "down", "left", "right", "action_a", "action_b"}
+    
+    # Prime generator
+    payload = yield (True, "ready")
+    
+    while payload is not None:
+        now = payload.get("timestamp", time.time())
+        key = payload.get("key", "")
+        coords = payload.get("coords", (0, 0))
+        
+        if now - last_time < min_delay:
+            payload = yield (False, "rate limit triggered")
             continue
+            
+        if key not in allowed_keys:
+            payload = yield (False, f"unsupported key mapping: {key}")
+            continue
+            
+        # Check viewport bounds (assuming a 1920x1080 engine viewport)
+        if "coords" in payload:
+            x, y = coords
+            if not (0 <= x <= 1920 and 0 <= y <= 1080):
+                payload = yield (False, f"out of bounds coordinates: {x},{y}")
+                continue
+                
+        last_time = now
+        payload = yield (True, "valid")
