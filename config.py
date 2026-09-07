@@ -1,32 +1,35 @@
-import json
 import os
-from typing import Any, Dict
+from dataclasses import dataclass
+from typing import Dict, Any
 
-class ConfigLoader:
-    def __init__(self, defaults: Dict[str, Any]):
-        self._data = defaults
+@dataclass(frozen=True)
+class GameConfig:
+    render_fps: int = 144
+    resolution: tuple = (1920, 1080)
+    asset_path: str = "./assets"
+    debug_mode: bool = False
 
-    def load(self, path: str) -> None:
-        if not os.path.exists(path):
-            return
-        with open(path, 'r') as f:
-            user_config = json.load(f)
-            self._recursive_update(self._data, user_config)
-
-    def _recursive_update(self, base: Dict, patch: Dict) -> None:
-        for key, value in patch.items():
-            if isinstance(value, dict) and key in base:
-                self._recursive_update(base[key], value)
-            else:
-                base[key] = value
+class SettingsRegistry:
+    def __init__(self, overrides: Dict[str, Any] = None):
+        self._storage = {
+            "graphics": GameConfig(),
+            "physics": {"gravity": -9.81, "friction": 0.5},
+            "network": {"timeout": 30, "retries": 3}
+        }
+        if overrides:
+            self._storage.update(overrides)
 
     def get(self, key: str, default: Any = None) -> Any:
-        return self._data.get(key, default)
+        return self._storage.get(key, default)
 
     def __getattr__(self, name: str) -> Any:
-        if name in self._data:
-            return self._data[name]
-        raise AttributeError(f'Config key {name} missing')
+        if name in self._storage:
+            return self._storage[name]
+        raise AttributeError(f"Setting '{name}' missing from game registry")
 
-    def __repr__(self) -> str:
-        return f'ConfigManager(keys={list(self._data.keys())})'
+def load_environment_overrides() -> Dict[str, Any]:
+    return {
+        "debug_mode": os.getenv("GAME_DEBUG", "False").lower() == "true"
+    }
+
+active_config = SettingsRegistry(overrides=load_environment_overrides())
