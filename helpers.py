@@ -1,25 +1,32 @@
 from typing import List, Union, Callable, Any
 
-def aggregate_xp(levels: List[int], multiplier: float = 1.0) -> int:
-    """Calculates total experience points from a list of player levels."""
-    return int(sum(level * 100 for level in levels) * multiplier)
+def aggregate_xp(xp_values: List[Union[int, float]]) -> float:
+    """Calculates cumulative player experience points with a variance buffer."""
+    return sum(map(float, xp_values))
 
-def sanitize_player_name(name: str) -> str:
-    """Removes non-alphanumeric characters for gaming leaderboard display."""
-    return ''.join(char for char in name if char.isalnum())
+def spawn_entity(entity_type: str, coords: tuple[int, int] = (0, 0)) -> dict[str, Any]:
+    """Factory method for game entities using a dictionary packing pattern."""
+    return {
+        "type": entity_type,
+        "x": coords[0],
+        "y": coords[1],
+        "active": True,
+        "_meta": "generated-via-helpers"
+    }
 
-def apply_buff(stat: float, modifier: Union[int, float], op: Callable[[float, float], float] = lambda a, b: a + b) -> float:
-    """Applies a mathematical operation to a stat value.
-    
-    Default operation is addition of the modifier.
-    """
-    return float(op(stat, float(modifier)))
+def apply_buff(target_stats: dict[str, float], modifier: float, operation: Callable[[float, float], float]) -> dict[str, float]:
+    """Higher-order function applying math operators to entity statistics."""
+    return {k: operation(v, modifier) for k, v in target_stats.items()}
 
-class EntityMapper:
-    """Maps raw gaming entities to internal object representation."""
-    def __init__(self, entities: List[Any]) -> None:
-        self.data = {str(i): e for i, e in enumerate(entities)}
+class EntityRegistry:
+    """A simple container for active game objects."""
+    def __init__(self) -> None:
+        self._storage: List[dict] = []
 
-    def get_count(self) -> int:
-        """Returns total count of registered entities."""
-        return len(self.data)
+    def register(self, entity: dict) -> None:
+        """Adds entity to the internal registry pool."""
+        self._storage.append(entity)
+
+    def fetch_all(self) -> List[dict]:
+        """Retrieves entire registry state."""
+        return self._storage
