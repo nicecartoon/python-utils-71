@@ -1,26 +1,34 @@
 import logging
-import datetime
-from typing import Any
+from logging.handlers import RotatingFileHandler
+import sys
+
+def setup_game_logger(log_name='game_engine', file_path='engine.log'):
+    logger = logging.getLogger(log_name)
+    logger.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('[%(asctime)s] [%(levelname)s] :: %(message)s')
+    
+    file_handler = RotatingFileHandler(
+        file_path, 
+        maxBytes=1024 * 1024 * 5, 
+        backupCount=3
+    )
+    file_handler.setFormatter(formatter)
+    
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+    
+    if not logger.handlers:
+        logger.addHandler(file_handler)
+        logger.addHandler(console_handler)
+        
+    return logger
 
 class GamingLogger:
-    def __init__(self, name: str = 'GamerLog'):
-        self.logger = logging.getLogger(name)
-        self._setup()
+    def __init__(self, name='core'):
+        self.log = setup_game_logger(name)
 
-    def _setup(self) -> None:
-        handler = logging.StreamHandler()
-        formatter = logging.Formatter('[%(asctime)s] [LEVEL:%(levelname)s] :: %(message)s')
-        handler.setFormatter(formatter)
-        self.logger.addHandler(handler)
-        self.logger.setLevel(logging.DEBUG)
+    def critical_hit(self, msg):
+        self.log.info(f'CRITICAL EVENT: {msg}')
 
-    def log_event(self, event_type: str, data: Any) -> None:
-        timestamp = datetime.datetime.now().strftime('%H:%M:%S')
-        formatted = f'[{timestamp}] EVENT:{event_type.upper()} | DATA:{data}'
-        self.logger.info(formatted)
-
-    def critical_fail(self, msg: str) -> None:
-        self.logger.critical(f'!!! CRITICAL GAMING FAILURE: {msg} !!!')
-
-log = GamingLogger().log_event
-fail = GamingLogger().critical_fail
+    def glitch_detected(self, msg):
+        self.log.warning(f'GLITCH WARNING: {msg}')
