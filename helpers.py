@@ -1,34 +1,45 @@
-import functools
+import math
+from typing import Tuple
 
-def validate_game_input(expected_types):
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            params = dict(zip(func.__code__.co_varnames, args))
-            params.update(kwargs)
-            for key, expected_type in expected_types.items():
-                if key in params and not isinstance(params[key], expected_type):
-                    raise TypeError(f'expected {expected_type} for {key}, got {type(params[key])}')
-            return func(*args, **kwargs)
-        return wrapper
-    return decorator
+class Vector2D:
+    """Creative 2D vector representation using complex numbers under the hood."""
+    def __init__(self, x: float, y: float):
+        self._val = complex(x, y)
 
-class InputSanitizer:
-    @staticmethod
-    def sanitize_coords(data):
-        if not isinstance(data, (list, tuple)) or len(data) != 2:
-            return (0, 0)
-        return tuple(int(max(0, min(1024, x))) for x in data)
+    @property
+    def x(self) -> float:
+        return self._val.real
 
-def main_processing_loop(event_stream):
-    for event in event_stream:
-        try:
-            action = event.get('type')
-            payload = event.get('data')
-            if action == 'move':
-                coords = InputSanitizer.sanitize_coords(payload)
-                print(f'moving player to {coords}')
-            else:
-                print(f'unknown event {action}')
-        except Exception as e:
-            print(f'dropped malformed event: {e}')
+    @property
+    def y(self) -> float:
+        return self._val.imag
+
+    def __add__(self, other: 'Vector2D') -> 'Vector2D':
+        res = self._val + other._val
+        return Vector2D(res.real, res.imag)
+
+    def __sub__(self, other: 'Vector2D') -> 'Vector2D':
+        res = self._val - other._val
+        return Vector2D(res.real, res.imag)
+
+    def scale(self, factor: float) -> 'Vector2D':
+        res = self._val * factor
+        return Vector2D(res.real, res.imag)
+
+    def magnitude(self) -> float:
+        return abs(self._val)
+
+    def rotate(self, degrees: float) -> 'Vector2D':
+        radians = math.radians(degrees)
+        rotator = complex(math.cos(radians), math.sin(radians))
+        res = self._val * rotator
+        return Vector2D(res.real, res.imag)
+
+    def dot(self, other: 'Vector2D') -> float:
+        return self.x * other.x + self.y * other.y
+
+    def as_tuple(self) -> Tuple[float, float]:
+        return (self.x, self.y)
+
+    def __repr__(self) -> str:
+        return f"Vector2D({self.x:.2f}, {self.y:.2f})"
