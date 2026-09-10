@@ -1,39 +1,32 @@
 import time
-from functools import lru_cache
+import random
+from typing import Callable, Any
 
-class GameStateOptimizer:
-    def __init__(self, capacity: int = 1024):
-        self.capacity = capacity
-        self._tick_history = []
+def loot_generator(rarity: str) -> dict:
+    loot_table = {'common': 0.8, 'rare': 0.15, 'legendary': 0.05}
+    roll = random.random()
+    item = 'wood' if roll < loot_table.get(rarity, 0.5) else 'sword'
+    return {'item': item, 'timestamp': time.time()}
 
-    @lru_cache(maxsize=128)
-    def calculate_trajectory(self, velocity: float, angle: float, gravity: float = 9.81) -> float:
-        import math
-        rad = math.radians(angle)
-        return (pow(velocity, 2) * math.sin(2 * rad)) / gravity
+def throttle(rate_limit: float) -> Callable:
+    def decorator(func: Callable) -> Callable:
+        last_called = [0.0]
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            elapsed = time.time() - last_called[0]
+            if elapsed < rate_limit:
+                time.sleep(rate_limit - elapsed)
+            result = func(*args, **kwargs)
+            last_called[0] = time.time()
+            return result
+        return wrapper
+    return decorator
 
-    def batch_process_entities(self, entities: list, delta_time: float) -> list:
-        optimized_updates = []
-        for entity in entities:
-            pos = entity.get('position', (0.0, 0.0))
-            vel = entity.get('velocity', (0.0, 0.0))
-            new_pos = (
-                pos[0] + vel[0] * delta_time,
-                pos[1] + vel[1] * delta_time
-            }
-            optimized_updates.append({'id': entity['id'], 'position': new_pos})
-        return optimized_updates
+@throttle(0.1)
+def spawn_entity(name: str) -> str:
+    return f'entity {name} spawned at {time.time()}'
 
-    def profile_execution(self, func, *args, **kwargs):
-        start_time = time.perf_counter()
-        result = func(*args, **kwargs)
-        duration = time.perf_counter() - start_time
-        self._tick_history.append(duration)
-        if len(self._tick_history) > self.capacity:
-            self._tick_history.pop(0)
-        return result
+def validate_player_state(hp: int, mana: int) -> bool:
+    return all([isinstance(hp, int), isinstance(mana, int), hp >= 0, mana >= 0])
 
-    def get_average_tick_time(self) -> float:
-        if not self._tick_history:
-            return 0.0
-        return sum(self._tick_history) / len(self._tick_history)
+def batch_process(items: list, action: Callable) -> list:
+    return [action(i) for i in items]
