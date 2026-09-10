@@ -1,35 +1,41 @@
 import os
-from dataclasses import dataclass
 from typing import Dict, Any
 
-@dataclass(frozen=True)
 class GameConfig:
-    render_fps: int = 144
-    resolution: tuple = (1920, 1080)
-    asset_path: str = "./assets"
-    debug_mode: bool = False
-
-class SettingsRegistry:
-    def __init__(self, overrides: Dict[str, Any] = None):
-        self._storage = {
-            "graphics": GameConfig(),
-            "physics": {"gravity": -9.81, "friction": 0.5},
-            "network": {"timeout": 30, "retries": 3}
-        }
-        if overrides:
-            self._storage.update(overrides)
-
-    def get(self, key: str, default: Any = None) -> Any:
-        return self._storage.get(key, default)
-
-    def __getattr__(self, name: str) -> Any:
-        if name in self._storage:
-            return self._storage[name]
-        raise AttributeError(f"Setting '{name}' missing from game registry")
-
-def load_environment_overrides() -> Dict[str, Any]:
-    return {
-        "debug_mode": os.getenv("GAME_DEBUG", "False").lower() == "true"
+    """Dynamic registry for game parameters with environmental override support."""
+    _registry: Dict[str, Any] = {
+        "frame_rate": 60,
+        "resolution": (1920, 1080),
+        "enable_physics_debug": False,
+        "cache_size_mb": 512
     }
 
-active_config = SettingsRegistry(overrides=load_environment_overrides())
+    def __init__(self, prefix: str = "GAME_"):
+        self.prefix = prefix
+        self._apply_env_overrides()
+
+    def _apply_env_overrides(self) -> None:
+        for key in self._registry:
+            env_key = f"{self.prefix}{key.upper()}"
+            if env_key in os.environ:
+                raw_val = os.environ[env_key]
+                self._registry[key] = self._parse_val(raw_val)
+
+    def _parse_val(self, val: str) -> Any:
+        if val.lower() in ("true", "false"):
+            return val.lower() == "true"
+        try:
+            return int(val)
+        except ValueError:
+            return val
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return self._registry.get(key, default)
+
+    def __getitem__(self, key: str) -> Any:
+        return self._registry[key]
+
+    def __repr__(self) -> str:
+        return f"GameConfig({self._registry})"
+
+instance = GameConfig()
