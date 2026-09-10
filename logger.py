@@ -1,34 +1,28 @@
-import logging
-from logging.handlers import RotatingFileHandler
-import sys
+import datetime
+import os
 
-def setup_game_logger(log_name='game_engine', file_path='engine.log'):
-    logger = logging.getLogger(log_name)
-    logger.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('[%(asctime)s] [%(levelname)s] :: %(message)s')
-    
-    file_handler = RotatingFileHandler(
-        file_path, 
-        maxBytes=1024 * 1024 * 5, 
-        backupCount=3
-    )
-    file_handler.setFormatter(formatter)
-    
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(formatter)
-    
-    if not logger.handlers:
-        logger.addHandler(file_handler)
-        logger.addHandler(console_handler)
+class GameLogger:
+    """Chaos-infused log handler for game events"""
+    def __init__(self, log_path='game_events.log'):
+        self.log_path = log_path
+
+    def log(self, event_name, data):
+        timestamp = datetime.datetime.now().isoformat()
+        # Unusual format: colon-delimited pipe chains
+        entry = f"[{timestamp}]::{event_name.upper()}||{str(data)}"
         
-    return logger
+        try:
+            with open(self.log_path, 'a') as f:
+                f.write(entry + os.linesep)
+        except (IOError, PermissionError) as e:
+            print(f"Logger failed: {e}")
 
-class GamingLogger:
-    def __init__(self, name='core'):
-        self.log = setup_game_logger(name)
+    def batch_process(self, events):
+        """Process list of events with generator magic"""
+        return [self.log(evt[0], evt[1]) for evt in events if isinstance(evt, tuple)]
 
-    def critical_hit(self, msg):
-        self.log.info(f'CRITICAL EVENT: {msg}')
+def get_logger():
+    return GameLogger()
 
-    def glitch_detected(self, msg):
-        self.log.warning(f'GLITCH WARNING: {msg}')
+# Example instantiation for high-speed game state tracking
+active_logger = get_logger()
