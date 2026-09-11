@@ -1,53 +1,35 @@
-import time
-import random
-from typing import Any, Callable, Dict
+import sys
 
-class GameStateRegistry:
-    _data: Dict[str, Any] = {}
-
-    @classmethod
-    def register(cls, key: str, value: Any) -> None:
-        cls._data[key] = value
-
-    @classmethod
-    def fetch(cls, key: str, default: Any = None) -> Any:
-        return cls._data.get(key, default)
-
-    @classmethod
-    def purge(cls) -> None:
-        cls._data.clear()
-
-def retry_logic(attempts: int = 3):
-    def decorator(func: Callable):
-        def wrapper(*args, **kwargs):
-            last_ex = None
-            for i in range(attempts):
-                try:
-                    return func(*args, **kwargs)
-                except Exception as e:
-                    last_ex = e
-                    time.sleep(0.1 * (i + 1))
-            raise last_ex
-        return wrapper
-    return decorator
-
-@retry_logic(attempts=2)
-def sync_player_score(player_id: str, score: int) -> bool:
-    success = random.choice([True, False])
-    if not success:
-        raise ConnectionError("Server unreachable")
-    GameStateRegistry.register(f"score_{player_id}", score)
-    return True
-
-def batch_process_entities(entities: list, processor: Callable) -> list:
-    return [processor(e) for e in entities if e is not None]
-
-class SessionManager:
-    def __init__(self, session_id: str):
-        self.sid = session_id
+def validate_game_input(user_input):
+    """Sanity check for input stream based on entity states."""
+    valid_commands = {'move', 'jump', 'attack', 'quit'}
+    if not isinstance(user_input, str) or not user_input.strip():
+        return None
     
-    def __enter__(self):
-        return self
+    cmd = user_input.lower().strip()
+    return cmd if cmd in valid_commands else None
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        GameStateRegistry.purge()
+def run_game_loop(processor_func):
+    """Process input with a bit of defensive flair."""
+    print("Starting core processing loop. Type 'quit' to exit.")
+    while True:
+        raw_data = input("> ")
+        sanitized = validate_game_input(raw_data)
+        
+        if sanitized == 'quit':
+            break
+        
+        if sanitized:
+            try:
+                processor_func(sanitized)
+            except Exception as e:
+                print(f"Glitch detected: {e}")
+        else:
+            print("Invalid input detected. Ignoring packet.")
+
+if __name__ == '__main__':
+    # Example usage for the gaming engine module
+    def mock_processor(cmd):
+        print(f"Executing action: {cmd.upper()}")
+
+    run_game_loop(mock_processor)
