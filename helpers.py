@@ -1,38 +1,42 @@
-import math
-from typing import Tuple, Dict, List, Any
+import logging
+from logging.handlers import RotatingFileHandler
+import sys
 
-class SpatialGrid:
-    """
-    An optimized 2D spatial hash grid for quick neighborhood queries in games.
-    Uses bit-shifting for grid binning to avoid expensive division.
-    """
-    def __init__(self, cell_size_power: int = 6):
-        self.shift = cell_size_power
-        self.grid: Dict[Tuple[int, int], List[Any]] = {}
+class GamingLogFormatter(logging.Formatter):
+    """Custom log formatter rendering log records as RPG event logs."""
+    LEVEL_ICONS = {
+        logging.DEBUG: "[LOOT]",
+        logging.INFO: "[QUEST]",
+        logging.WARNING: "[HAZARD]",
+        logging.ERROR: "[WIPE]",
+        logging.CRITICAL: "[GAME OVER]"
+    }
 
-    def clear(self) -> None:
-        self.grid.clear()
+    def format(self, record):
+        icon = self.LEVEL_ICONS.get(record.levelno, "[EVENT]")
+        record.msg = f"{icon} {record.msg}"
+        return super().format(record)
 
-    def _hash(self, x: float, y: float) -> Tuple[int, int]:
-        return (int(x) >> self.shift, int(y) >> self.shift)
+def setup_game_logger(name="game_core", log_file="game.log", max_megabytes=5, backup_count=3):
+    """Configures a rotating logger tuned for game telemetry and debugging."""
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
+    
+    if logger.handlers:
+        return logger
 
-    def insert(self, x: float, y: float, obj: Any) -> None:
-        key = self._hash(x, y)
-        if key not in self.grid:
-            self.grid[key] = []
-        self.grid[key].append(obj)
-
-    def get_nearby(self, x: float, y: float) -> List[Any]:
-        cx, cy = self._hash(x, y)
-        nearby = []
-        for dx in (-1, 0, 1):
-            for dy in (-1, 0, 1):
-                cell = (cx + dx, cy + dy)
-                if cell in self.grid:
-                    nearby.extend(self.grid[cell])
-        return nearby
-
-    def update_objects(self, objects: List[Tuple[float, float, Any]]) -> None:
-        self.clear()
-        for x, y, obj in objects:
-            self.insert(x, y, obj)
+    max_bytes = max_megabytes * 1024 * 1024
+    handler = RotatingFileHandler(log_file, maxBytes=max_bytes, backupCount=backup_count)
+    
+    formatter = GamingLogFormatter(
+        fmt="%(asctime)s | %(levelname)-8s | %(message)s",
+        datefmt="%H:%M:%S"
+    )
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+    
+    return logger
