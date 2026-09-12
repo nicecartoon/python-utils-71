@@ -1,33 +1,38 @@
-import logging
-from logging.handlers import RotatingFileHandler
-import os
+import math
+from typing import Tuple, Dict, List, Any
 
-def get_game_logger(name='game_logger', log_file='game_log.log', max_bytes=1048576, backup_count=3):
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
-    
-    if not logger.handlers:
-        formatter = logging.Formatter(
-            '%(asctime)s | %(levelname)-8s | [PID:%(process)d] %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
-        )
+class SpatialGrid:
+    """
+    An optimized 2D spatial hash grid for quick neighborhood queries in games.
+    Uses bit-shifting for grid binning to avoid expensive division.
+    """
+    def __init__(self, cell_size_power: int = 6):
+        self.shift = cell_size_power
+        self.grid: Dict[Tuple[int, int], List[Any]] = {}
 
-        # File rotation handler with byte limit constraint
-        file_handler = RotatingFileHandler(
-            log_file, 
-            maxBytes=max_bytes, 
-            backupCount=backup_count
-        )
-        file_handler.setFormatter(formatter)
-        
-        # Console output for real-time debugging
-        console_handler = logging.StreamHandler()
-        console_handler.setFormatter(formatter)
-        
-        logger.addHandler(file_handler)
-        logger.addHandler(console_handler)
+    def clear(self) -> None:
+        self.grid.clear()
 
-    return logger
+    def _hash(self, x: float, y: float) -> Tuple[int, int]:
+        return (int(x) >> self.shift, int(y) >> self.shift)
 
-# Dynamic log initialization based on current execution context
-log = get_game_logger()
+    def insert(self, x: float, y: float, obj: Any) -> None:
+        key = self._hash(x, y)
+        if key not in self.grid:
+            self.grid[key] = []
+        self.grid[key].append(obj)
+
+    def get_nearby(self, x: float, y: float) -> List[Any]:
+        cx, cy = self._hash(x, y)
+        nearby = []
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                cell = (cx + dx, cy + dy)
+                if cell in self.grid:
+                    nearby.extend(self.grid[cell])
+        return nearby
+
+    def update_objects(self, objects: List[Tuple[float, float, Any]]) -> None:
+        self.clear()
+        for x, y, obj in objects:
+            self.insert(x, y, obj)
