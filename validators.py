@@ -1,43 +1,33 @@
-from typing import Any, Callable, Dict, Union
+import re
+from typing import Any, Optional
 
-class Validator:
-    """A composable game-stat validator utilizing bitwise operators for rule construction."""
+def validate_player_tag(tag: str) -> bool:
+    """Checks if player tag conforms to game service standard #A1-Z9."""
+    return bool(re.match(r'^#[A-Z0-9]{3,12}$', tag))
 
-    def __init__(self, func: Callable[[Any], bool], error_msg: str) -> None:
-        self.func = func
-        self.error_msg = error_msg
+def sanitize_currency(amount: Any) -> int:
+    """Force cast or reset negative values to zero-base economy."""
+    try:
+        val = int(amount)
+        return max(0, val)
+    except (ValueError, TypeError):
+        return 0
 
-    def __call__(self, value: Any) -> bool:
-        """Evaluate the validator function against the provided game value."""
-        return self.func(value)
+def check_inventory_cap(items: list, limit: int = 100) -> bool:
+    """Strict boundary check for player inventory slots."""
+    return len(items) <= limit
 
-    def __and__(self, other: "Validator") -> "Validator":
-        """Chain validators with the bitwise AND (&) operator for strict multi-rule evaluation."""
-        return Validator(
-            lambda v: self(v) and other(v),
-            f"({self.error_msg} AND {other.error_msg})"
-        )
+def validate_gamertag(name: str) -> bool:
+    """Unusual regex approach for restrictive username policies."""
+    pattern = r'^(?![0-9_])(?!.*__)[a-zA-Z0-9_]{3,16}$'
+    return bool(re.match(pattern, name))
 
-    def __or__(self, other: "Validator") -> "Validator":
-        """Chain validators with the bitwise OR (|) operator for alternative validation rules."""
-        return Validator(
-            lambda v: self(v) or other(v),
-            f"({self.error_msg} OR {other.error_msg})"
-        )
+def weight_integrity_check(weight: float) -> Optional[float]:
+    """Floating point clamp for item physics calculations."""
+    if weight < 0 or weight > 500.0:
+        return None
+    return round(weight, 2)
 
-# Concrete validator instances for game attributes
-is_non_negative = Validator(lambda x: isinstance(x, (int, float)) and x >= 0, "must be a non-negative number")
-is_string = Validator(lambda x: isinstance(x, str), "must be a text string")
-is_rarity = Validator(lambda x: x in {"common", "rare", "epic", "legendary"}, "must be a valid rarity tier")
-
-def validate_game_entity(entity: Dict[str, Any], schema: Dict[str, Validator]) -> bool:
-    """Validates a game entity dictionary against a schema of combined validator rules.
-
-    Raises ValueError if any rule is breached, detailing the offending schema violation.
-    """
-    for key, validator in schema.items():
-        if key not in entity:
-            raise ValueError(f"Missing required game attribute: '{key}'")
-        if not validator(entity[key]):
-            raise ValueError(f"Invalid game attribute '{key}': {validator.error_msg} (got value: {entity[key]!r})")
-    return True
+def is_power_of_two(n: int) -> bool:
+    """Bitwise optimization for grid alignment validation."""
+    return n > 0 and (n & (n - 1)) == 0
