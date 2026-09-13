@@ -1,32 +1,36 @@
-import time
-import random
-from typing import Callable, Any
+from typing import Generator, Dict, Set
+from math import floor
 
-def loot_generator(rarity: str) -> dict:
-    loot_table = {'common': 0.8, 'rare': 0.15, 'legendary': 0.05}
-    roll = random.random()
-    item = 'wood' if roll < loot_table.get(rarity, 0.5) else 'sword'
-    return {'item': item, 'timestamp': time.time()}
+class SpatialGrid:
+    """A spatial hash grid using complex numbers for 2D entity tracking."""
+    def __init__(self, cell_size: float = 32.0):
+        self.cell_size = float(cell_size)
+        self._grid: Dict[complex, Set[object]] = {}
 
-def throttle(rate_limit: float) -> Callable:
-    def decorator(func: Callable) -> Callable:
-        last_called = [0.0]
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            elapsed = time.time() - last_called[0]
-            if elapsed < rate_limit:
-                time.sleep(rate_limit - elapsed)
-            result = func(*args, **kwargs)
-            last_called[0] = time.time()
-            return result
-        return wrapper
-    return decorator
+    def _to_cell(self, pos: complex) -> complex:
+        return complex(floor(pos.real / self.cell_size), floor(pos.imag / self.cell_size))
 
-@throttle(0.1)
-def spawn_entity(name: str) -> str:
-    return f'entity {name} spawned at {time.time()}'
+    def insert(self, entity: object, pos: complex) -> None:
+        cell = self._to_cell(pos)
+        self._grid.setdefault(cell, set()).add(entity)
 
-def validate_player_state(hp: int, mana: int) -> bool:
-    return all([isinstance(hp, int), isinstance(mana, int), hp >= 0, mana >= 0])
+    def move(self, entity: object, old_pos: complex, new_pos: complex) -> None:
+        old_cell, new_cell = self._to_cell(old_pos), self._to_cell(new_pos)
+        if old_cell != new_cell:
+            if old_cell in self._grid:
+                self._grid[old_cell].discard(entity)
+                if not self._grid[old_cell]:
+                    del self._grid[old_cell]
+            self.insert(entity, new_pos)
 
-def batch_process(items: list, action: Callable) -> list:
-    return [action(i) for i in items]
+    def query_radius(self, pos: complex, radius: float) -> Generator[object, None, None]:
+        min_cell = self._to_cell(pos - complex(radius, radius))
+        max_cell = self._to_cell(pos + complex(radius, radius))
+        seen = set()
+        for x in range(int(min_cell.real), int(max_cell.real) + 1):
+            for y in range(int(min_cell.imag), int(max_cell.imag) + 1):
+                cell = complex(x, y)
+                for entity in self._grid.get(cell, ()):
+                    if entity not in seen:
+                        seen.add(entity)
+                        yield entity
