@@ -1,30 +1,39 @@
-from typing import Dict, List, Any, Union, Callable
+import time
+import random
+import functools
+from typing import Callable, Any, Optional
 
-class GameActionHandler:
-    def __init__(self, registry: Dict[str, Callable[[Any], None]]) -> None:
-        """Initialize handler with a registry of game-state mutation functions."""
-        self._registry: Dict[str, Callable[[Any], None]] = registry
+class NetworkPacketRetry:
+    """Retry handler tailored for latency-sensitive gaming network requests."""
 
-    def execute(self, action_name: str, payload: Union[int, str, dict]) -> None:
-        """Dispatch game events to their registered logic components."""
-        action = self._registry.get(action_name)
-        if action:
-            try:
-                action(payload)
-            except Exception as e:
-                self._log_error(action_name, e)
+    def __init__(self, max_retries: int = 3, base_delay: float = 0.1, max_delay: float = 2.0):
+        self.max_retries = max_retries
+        self.base_delay = base_delay
+        self.max_delay = max_delay
 
-    def _log_error(self, name: str, err: Exception) -> None:
-        """Internal diagnostic logging for failed state mutations."""
-        print(f"[ERROR] action '{name}' failed with exception: {err}")
+    def __call__(self, func: Callable[..., Any]) -> Callable[..., Any]:
+        @functools.wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            last_exception: Optional[Exception] = None
+            for attempt in range(1, self.max_retries + 2):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as exc:
+                    last_exception = exc
+                    if attempt > self.max_retries:
+                        break
+                    delay = min(self.max_delay, self.base_delay * (2 ** (attempt - 1)))
+                    jitter = random.uniform(0, delay * 0.5)
+                    time.sleep(delay + jitter)
+            if last_exception:
+                raise last_exception
+        return wrapper
 
-def create_handler(commands: List[str]) -> GameActionHandler:
-    """Factory function returning a configured handler instance."""
-    mapping: Dict[str, Callable[[Any], None]] = {
-        cmd: (lambda x: print(f"Processing {cmd}: {x}")) for cmd in commands
-    }
-    return GameActionHandler(mapping)
-
-if __name__ == "__main__":
-    handler = create_handler(['spawn', 'despawn', 'level_up'])
-    handler.execute('spawn', {'id': 101, 'type': 'dragon'})
+def send_game_telemetry(payload: dict) -> bool:
+    """Example function using retry decorator for game network calls."""
+    @NetworkPacketRetry(max_retries=4, base_delay=0.05)
+    def _dispatch():
+        if random.random() < 0.7:
+            raise ConnectionError("Packet dropped in game session pipeline")
+        return True
+    return _dispatch()
