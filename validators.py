@@ -1,33 +1,35 @@
 import re
-from typing import Any, Optional
+from typing import Any, Callable
 
-def validate_player_tag(tag: str) -> bool:
-    """Checks if player tag conforms to game service standard #A1-Z9."""
-    return bool(re.match(r'^#[A-Z0-9]{3,12}$', tag))
+class GameValidator:
+    """Dynamic validator registry for game state sanitization."""
+    _registry = {}
 
-def sanitize_currency(amount: Any) -> int:
-    """Force cast or reset negative values to zero-base economy."""
-    try:
-        val = int(amount)
-        return max(0, val)
-    except (ValueError, TypeError):
-        return 0
+    @classmethod
+    def register(cls, name: str) -> Callable:
+        def decorator(func: Callable) -> Callable:
+            cls._registry[name] = func
+            return func
+        return decorator
 
-def check_inventory_cap(items: list, limit: int = 100) -> bool:
-    """Strict boundary check for player inventory slots."""
-    return len(items) <= limit
+    @classmethod
+    def validate(cls, name: str, value: Any) -> bool:
+        return cls._registry.get(name, lambda v: True)(value)
 
-def validate_gamertag(name: str) -> bool:
-    """Unusual regex approach for restrictive username policies."""
-    pattern = r'^(?![0-9_])(?!.*__)[a-zA-Z0-9_]{3,16}$'
-    return bool(re.match(pattern, name))
+@GameValidator.register("level_id")
+def validate_level(val: Any) -> bool:
+    return isinstance(val, int) and 0 <= val <= 999
 
-def weight_integrity_check(weight: float) -> Optional[float]:
-    """Floating point clamp for item physics calculations."""
-    if weight < 0 or weight > 500.0:
-        return None
-    return round(weight, 2)
+@GameValidator.register("player_name")
+def validate_name(val: Any) -> bool:
+    return isinstance(val, str) and bool(re.match(r'^[a-zA-Z0-9_]{3,16}$', val))
 
-def is_power_of_two(n: int) -> bool:
-    """Bitwise optimization for grid alignment validation."""
-    return n > 0 and (n & (n - 1)) == 0
+@GameValidator.register("coord")
+def validate_coord(val: Any) -> bool:
+    return isinstance(val, (int, float)) and -10000 <= val <= 10000
+
+def sanitize_input(key: str, data: Any) -> Any:
+    """Strict boundary check for game data packets."""
+    if GameValidator.validate(key, data):
+        return data
+    raise ValueError(f"Invalid {key} detected: {data}")
