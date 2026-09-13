@@ -1,28 +1,34 @@
-import datetime
+import logging
+from logging.handlers import RotatingFileHandler
 import os
 
-class GameLogger:
-    """Chaos-infused log handler for game events"""
-    def __init__(self, log_path='game_events.log'):
-        self.log_path = log_path
+def setup_game_logger(name='pixel_forge', log_path='logs/game.log'):
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
+    
+    formatter = logging.Formatter(
+        '[%(asctime)s] | %(levelname)s | %(name)s | %(message)s',
+        datefmt='%H:%M:%S'
+    )
 
-    def log(self, event_name, data):
-        timestamp = datetime.datetime.now().isoformat()
-        # Unusual format: colon-delimited pipe chains
-        entry = f"[{timestamp}]::{event_name.upper()}||{str(data)}"
+    # 5MB per file, keeping 3 backups
+    handler = RotatingFileHandler(
+        log_path, 
+        maxBytes=5*1024*1024, 
+        backupCount=3
+    )
+    handler.setFormatter(formatter)
+    
+    console = logging.StreamHandler()
+    console.setFormatter(formatter)
+    
+    if not logger.handlers:
+        logger.addHandler(handler)
+        logger.addHandler(console)
         
-        try:
-            with open(self.log_path, 'a') as f:
-                f.write(entry + os.linesep)
-        except (IOError, PermissionError) as e:
-            print(f"Logger failed: {e}")
+    return logger
 
-    def batch_process(self, events):
-        """Process list of events with generator magic"""
-        return [self.log(evt[0], evt[1]) for evt in events if isinstance(evt, tuple)]
-
-def get_logger():
-    return GameLogger()
-
-# Example instantiation for high-speed game state tracking
-active_logger = get_logger()
+# Quick access point for gaming components
+log = setup_game_logger()
