@@ -1,42 +1,36 @@
-import logging
-from logging.handlers import RotatingFileHandler
-import sys
+import functools
+import time
 
-class GamingLogFormatter(logging.Formatter):
-    """Custom log formatter rendering log records as RPG event logs."""
-    LEVEL_ICONS = {
-        logging.DEBUG: "[LOOT]",
-        logging.INFO: "[QUEST]",
-        logging.WARNING: "[HAZARD]",
-        logging.ERROR: "[WIPE]",
-        logging.CRITICAL: "[GAME OVER]"
-    }
+class CacheNode:
+    def __init__(self, ttl=5.0):
+        self.ttl = ttl
+        self.data = {}
+        self.expiry = {}
 
-    def format(self, record):
-        icon = self.LEVEL_ICONS.get(record.levelno, "[EVENT]")
-        record.msg = f"{icon} {record.msg}"
-        return super().format(record)
+    def __call__(self, func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            key = (func.__name__, args, frozenset(kwargs.items()))
+            now = time.time()
+            if key in self.data and now < self.expiry.get(key, 0):
+                return self.data[key]
+            result = func(*args, **kwargs)
+            self.data[key] = result
+            self.expiry[key] = now + self.ttl
+            return result
+        return wrapper
 
-def setup_game_logger(name="game_core", log_file="game.log", max_megabytes=5, backup_count=3):
-    """Configures a rotating logger tuned for game telemetry and debugging."""
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
-    
-    if logger.handlers:
-        return logger
+memoize_frame = CacheNode(ttl=0.1)
 
-    max_bytes = max_megabytes * 1024 * 1024
-    handler = RotatingFileHandler(log_file, maxBytes=max_bytes, backupCount=backup_count)
-    
-    formatter = GamingLogFormatter(
-        fmt="%(asctime)s | %(levelname)-8s | %(message)s",
-        datefmt="%H:%M:%S"
-    )
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-    
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(formatter)
-    logger.addHandler(console_handler)
-    
-    return logger
+@memoize_frame
+def calculate_collision(entity_a, entity_b):
+    # Simulate expensive geometric calculation
+    dx = entity_a.x - entity_b.x
+    dy = entity_a.y - entity_b.y
+    return (dx**2 + dy**2)**0.5 < 10.0
+
+def batch_process(entities, processor_func):
+    return [processor_func(e) for e in entities]
+
+def optimized_range_check(center, radius, entities):
+    return [e for e in entities if (e.x - center[0])**2 + (e.y - center[1])**2 <= radius**2]
