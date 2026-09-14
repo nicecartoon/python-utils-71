@@ -1,35 +1,43 @@
-import sys
+import functools
+import time
 
-def validate_game_input(user_input):
-    """Sanity check for input stream based on entity states."""
-    valid_commands = {'move', 'jump', 'attack', 'quit'}
-    if not isinstance(user_input, str) or not user_input.strip():
-        return None
-    
-    cmd = user_input.lower().strip()
-    return cmd if cmd in valid_commands else None
+class EntityCache:
+    def __init__(self, capacity=128):
+        self.capacity = capacity
+        self.storage = {}
+        self.order = []
 
-def run_game_loop(processor_func):
-    """Process input with a bit of defensive flair."""
-    print("Starting core processing loop. Type 'quit' to exit.")
-    while True:
-        raw_data = input("> ")
-        sanitized = validate_game_input(raw_data)
-        
-        if sanitized == 'quit':
-            break
-        
-        if sanitized:
-            try:
-                processor_func(sanitized)
-            except Exception as e:
-                print(f"Glitch detected: {e}")
-        else:
-            print("Invalid input detected. Ignoring packet.")
+    def __call__(self, func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            key = (args, frozenset(kwargs.items()))
+            if key in self.storage:
+                self.order.remove(key)
+                self.order.append(key)
+                return self.storage[key]
+            
+            result = func(*args, **kwargs)
+            if len(self.storage) >= self.capacity:
+                oldest = self.order.pop(0)
+                del self.storage[oldest]
+            
+            self.storage[key] = result
+            self.order.append(key)
+            return result
+        return wrapper
+
+@EntityCache(capacity=256)
+def calculate_hitbox_mesh(entity_id, scale_factor):
+    # Simulated expensive geometry generation
+    time.sleep(0.01)
+    return f"mesh_data_{entity_id}_{scale_factor}"
+
+def batch_process_entities(entities):
+    return [calculate_hitbox_mesh(e, 1.0) for e in entities]
 
 if __name__ == '__main__':
-    # Example usage for the gaming engine module
-    def mock_processor(cmd):
-        print(f"Executing action: {cmd.upper()}")
-
-    run_game_loop(mock_processor)
+    data = list(range(100))
+    start = time.perf_counter()
+    batch_process_entities(data)
+    batch_process_entities(data)
+    print(f"optimized mesh generation in {time.perf_counter() - start:.4f}s")
