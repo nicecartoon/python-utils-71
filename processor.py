@@ -1,30 +1,39 @@
-import logging
+import time
+import functools
+import random
 
-class InputGuardian:
-    def __init__(self, schema):
-        self.schema = schema
+class NetworkGlitch(Exception):
+    pass
 
-    def validate(self, packet):
-        for key, expected_type in self.schema.items():
-            if not isinstance(packet.get(key), expected_type):
-                raise ValueError(f'malformed packet data at {key}')
-        return True
+def retry_gaming_request(retries=3, base_delay=1.0):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            last_ex = None
+            for attempt in range(retries):
+                try:
+                    return func(*args, **kwargs)
+                except (ConnectionError, TimeoutError, NetworkGlitch) as e:
+                    last_ex = e
+                    jitter = random.uniform(0, 0.5)
+                    sleep_time = (base_delay * (2 ** attempt)) + jitter
+                    time.sleep(sleep_time)
+            raise last_ex
+        return wrapper
+    return decorator
 
-def run_game_loop(queue, schema):
-    guardian = InputGuardian(schema)
-    logging.basicConfig(level=logging.INFO)
-    
-    while True:
-        packet = queue.get()
-        if packet is None:
-            break
-            
-        try:
-            if guardian.validate(packet):
-                process_game_state(packet)
-        except ValueError as e:
-            logging.warning(f'ignored invalid packet: {e}')
+class PacketProcessor:
+    def __init__(self, endpoint):
+        self.endpoint = endpoint
 
-def process_game_state(packet):
-    # Core logic bypasses standard checks once validated
-    print(f'processing tick: {packet.get("tick")}')
+    @retry_gaming_request(retries=5, base_delay=0.5)
+    def sync_game_state(self, payload):
+        if random.random() < 0.3:
+            raise NetworkGlitch("Packet drop detected by server")
+        return {"status": "synced", "data": payload}
+
+def process_player_input(processor, data):
+    try:
+        return processor.sync_game_state(data)
+    except Exception as e:
+        return {"error": str(e), "status": "failed"}
