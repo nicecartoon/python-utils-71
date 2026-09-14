@@ -1,41 +1,34 @@
+import json
 import os
-from typing import Dict, Any
+from typing import Any, Dict
 
-class GameConfig:
-    """Dynamic registry for game parameters with environmental override support."""
-    _registry: Dict[str, Any] = {
-        "frame_rate": 60,
-        "resolution": (1920, 1080),
-        "enable_physics_debug": False,
-        "cache_size_mb": 512
+class ConfigLoader:
+    def __init__(self, file_path: str, defaults: Dict[str, Any]):
+        self.path = file_path
+        self.data = defaults
+        self.load()
+
+    def load(self) -> None:
+        if os.path.exists(self.path):
+            try:
+                with open(self.path, 'r') as f:
+                    loaded = json.load(f)
+                    self.data.update({k: v for k, v in loaded.items() if k in self.data})
+            except (json.JSONDecodeError, IOError):
+                pass
+
+    def __getattr__(self, name: str) -> Any:
+        return self.data.get(name)
+
+    def save(self) -> None:
+        with open(self.path, 'w') as f:
+            json.dump(self.data, f, indent=4)
+
+def get_game_config():
+    defaults = {
+        "resolution": "1920x1080",
+        "fullscreen": True,
+        "volume": 0.8,
+        "fps_limit": 144
     }
-
-    def __init__(self, prefix: str = "GAME_"):
-        self.prefix = prefix
-        self._apply_env_overrides()
-
-    def _apply_env_overrides(self) -> None:
-        for key in self._registry:
-            env_key = f"{self.prefix}{key.upper()}"
-            if env_key in os.environ:
-                raw_val = os.environ[env_key]
-                self._registry[key] = self._parse_val(raw_val)
-
-    def _parse_val(self, val: str) -> Any:
-        if val.lower() in ("true", "false"):
-            return val.lower() == "true"
-        try:
-            return int(val)
-        except ValueError:
-            return val
-
-    def get(self, key: str, default: Any = None) -> Any:
-        return self._registry.get(key, default)
-
-    def __getitem__(self, key: str) -> Any:
-        return self._registry[key]
-
-    def __repr__(self) -> str:
-        return f"GameConfig({self._registry})"
-
-instance = GameConfig()
+    return ConfigLoader("settings.json", defaults)
