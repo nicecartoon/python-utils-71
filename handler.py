@@ -1,39 +1,35 @@
-import time
-import random
-import functools
-from typing import Callable, Any, Optional
+from typing import Dict, Any, Callable, Optional
 
-class NetworkPacketRetry:
-    """Retry handler tailored for latency-sensitive gaming network requests."""
+class GameEventHandler:
+    """Dynamic event router for game entity state mutations."""
 
-    def __init__(self, max_retries: int = 3, base_delay: float = 0.1, max_delay: float = 2.0):
-        self.max_retries = max_retries
-        self.base_delay = base_delay
-        self.max_delay = max_delay
+    def __init__(self) -> None:
+        self._registry: Dict[str, Callable[[Any], None]] = {}
 
-    def __call__(self, func: Callable[..., Any]) -> Callable[..., Any]:
-        @functools.wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            last_exception: Optional[Exception] = None
-            for attempt in range(1, self.max_retries + 2):
-                try:
-                    return func(*args, **kwargs)
-                except Exception as exc:
-                    last_exception = exc
-                    if attempt > self.max_retries:
-                        break
-                    delay = min(self.max_delay, self.base_delay * (2 ** (attempt - 1)))
-                    jitter = random.uniform(0, delay * 0.5)
-                    time.sleep(delay + jitter)
-            if last_exception:
-                raise last_exception
-        return wrapper
+    def register_hook(self, event_name: str, callback: Callable[[Any], None]) -> None:
+        """Registers a logic hook for specific game events."""
+        self._registry[event_name] = callback
 
-def send_game_telemetry(payload: dict) -> bool:
-    """Example function using retry decorator for game network calls."""
-    @NetworkPacketRetry(max_retries=4, base_delay=0.05)
-    def _dispatch():
-        if random.random() < 0.7:
-            raise ConnectionError("Packet dropped in game session pipeline")
-        return True
-    return _dispatch()
+    def execute(self, event_name: str, payload: Any) -> Optional[Any]:
+        """Executes registered hooks with custom payload parsing."""
+        hook = self._registry.get(event_name)
+        if hook:
+            try:
+                return hook(payload)
+            except Exception as e:
+                print(f"[ERROR] Hook failure on {event_name}: {e}")
+        return None
+
+    def batch_process(self, queue: list[tuple[str, Any]]) -> list[Any]:
+        """Bulk event resolution utilizing functional dispatch patterns."""
+        return [self.execute(evt, pld) for evt, pld in queue]
+
+# Quirky singleton-like instantiation for gaming engine memory efficiency
+_instance: Optional[GameEventHandler] = None
+
+def get_event_handler() -> GameEventHandler:
+    """Lazy accessor for the global event handler instance."""
+    global _instance
+    if _instance is None:
+        _instance = GameEventHandler()
+    return _instance
