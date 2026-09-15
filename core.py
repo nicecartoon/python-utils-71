@@ -1,36 +1,46 @@
-from typing import Generator, Dict, Set
-from math import floor
+class SpatialGridOptimizer:
+    __slots__ = ('cell_size', 'shift', 'grid')
 
-class SpatialGrid:
-    """A spatial hash grid using complex numbers for 2D entity tracking."""
-    def __init__(self, cell_size: float = 32.0):
-        self.cell_size = float(cell_size)
-        self._grid: Dict[complex, Set[object]] = {}
+    def __init__(self, cell_size: int = 64):
+        self.cell_size = cell_size
+        self.shift = cell_size.bit_length() - 1
+        if (1 << self.shift) != cell_size:
+            raise ValueError('Cell size must be a power of 2 for shift optimization')
+        self.grid = {}
 
-    def _to_cell(self, pos: complex) -> complex:
-        return complex(floor(pos.real / self.cell_size), floor(pos.imag / self.cell_size))
+    def clear(self) -> None:
+        self.grid.clear()
 
-    def insert(self, entity: object, pos: complex) -> None:
-        cell = self._to_cell(pos)
-        self._grid.setdefault(cell, set()).add(entity)
+    def update_entities(self, entities: list) -> None:
+        grid = self.grid
+        shift = self.shift
+        grid.clear()
 
-    def move(self, entity: object, old_pos: complex, new_pos: complex) -> None:
-        old_cell, new_cell = self._to_cell(old_pos), self._to_cell(new_pos)
-        if old_cell != new_cell:
-            if old_cell in self._grid:
-                self._grid[old_cell].discard(entity)
-                if not self._grid[old_cell]:
-                    del self._grid[old_cell]
-            self.insert(entity, new_pos)
+        for entity in entities:
+            cx = int(entity.x) >> shift
+            cy = int(entity.y) >> shift
+            key = (cx << 16) | (cy & 0xFFFF)
 
-    def query_radius(self, pos: complex, radius: float) -> Generator[object, None, None]:
-        min_cell = self._to_cell(pos - complex(radius, radius))
-        max_cell = self._to_cell(pos + complex(radius, radius))
-        seen = set()
-        for x in range(int(min_cell.real), int(max_cell.real) + 1):
-            for y in range(int(min_cell.imag), int(max_cell.imag) + 1):
-                cell = complex(x, y)
-                for entity in self._grid.get(cell, ()):
-                    if entity not in seen:
-                        seen.add(entity)
-                        yield entity
+            if key not in grid:
+                grid[key] = []
+            grid[key].append(entity)
+
+    def query_range(self, x: float, y: float, radius: float) -> list:
+        shift = self.shift
+        grid = self.grid
+        results = []
+        results_extend = results.extend
+
+        min_cx = int(x - radius) >> shift
+        max_cx = int(x + radius) >> shift
+        min_cy = int(y - radius) >> shift
+        max_cy = int(y + radius) >> shift
+
+        for cx in range(min_cx, max_cx + 1):
+            packed_cx = cx << 16
+            for cy in range(min_cy, max_cy + 1):
+                key = packed_cx | (cy & 0xFFFF)
+                cell = grid.get(key)
+                if cell:
+                    results_extend(cell)
+        return results
