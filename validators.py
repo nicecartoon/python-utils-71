@@ -1,35 +1,27 @@
-import re
-from typing import Any, Callable
+from typing import Union, List, Any
 
-class GameValidator:
-    """Dynamic validator registry for game state sanitization."""
-    _registry = {}
+def validate_game_coords(coords: List[Union[int, float]]) -> bool:
+    """Verify coordinates fall within standard 2D game grid boundaries."""
+    if not isinstance(coords, list) or len(coords) != 2:
+        return False
+    return all(0 <= c <= 1000 for c in coords)
 
-    @classmethod
-    def register(cls, name: str) -> Callable:
-        def decorator(func: Callable) -> Callable:
-            cls._registry[name] = func
-            return func
-        return decorator
+def sanitize_player_input(data: str) -> str:
+    """Strip non-alphanumeric noise to prevent command injection exploits."""
+    return ''.join(char for char in data if char.isalnum())
 
-    @classmethod
-    def validate(cls, name: str, value: Any) -> bool:
-        return cls._registry.get(name, lambda v: True)(value)
+def check_mana_threshold(current: int, required: int, buff_mod: float = 1.0) -> bool:
+    """Boolean check for spell casting readiness with multiplier scaling."""
+    return current >= (required / buff_mod)
 
-@GameValidator.register("level_id")
-def validate_level(val: Any) -> bool:
-    return isinstance(val, int) and 0 <= val <= 999
+class ConfigValidator:
+    """Flexible validator for game configuration dictionaries."""
+    def __init__(self, schema: dict) -> None:
+        self.schema = schema
 
-@GameValidator.register("player_name")
-def validate_name(val: Any) -> bool:
-    return isinstance(val, str) and bool(re.match(r'^[a-zA-Z0-9_]{3,16}$', val))
-
-@GameValidator.register("coord")
-def validate_coord(val: Any) -> bool:
-    return isinstance(val, (int, float)) and -10000 <= val <= 10000
-
-def sanitize_input(key: str, data: Any) -> Any:
-    """Strict boundary check for game data packets."""
-    if GameValidator.validate(key, data):
-        return data
-    raise ValueError(f"Invalid {key} detected: {data}")
+    def validate(self, target: dict) -> bool:
+        """Verify target keys exist and type-match defined schema."""
+        for key, expected_type in self.schema.items():
+            if key not in target or not isinstance(target[key], expected_type):
+                return False
+        return True
