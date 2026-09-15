@@ -1,43 +1,39 @@
-import functools
 import time
+import random
+from functools import wraps
 
-class EntityCache:
-    def __init__(self, capacity=128):
-        self.capacity = capacity
-        self.storage = {}
-        self.order = []
+def gaming_timer(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        start = time.perf_counter()
+        result = func(*args, **kwargs)
+        print(f'[METRIC] {func.__name__} latency: {time.perf_counter() - start:.6f}s')
+        return result
+    return wrapper
 
-    def __call__(self, func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            key = (args, frozenset(kwargs.items()))
-            if key in self.storage:
-                self.order.remove(key)
-                self.order.append(key)
-                return self.storage[key]
-            
-            result = func(*args, **kwargs)
-            if len(self.storage) >= self.capacity:
-                oldest = self.order.pop(0)
-                del self.storage[oldest]
-            
-            self.storage[key] = result
-            self.order.append(key)
-            return result
-        return wrapper
+def roll_dice(sides=6, count=1):
+    return [random.randint(1, sides) for _ in range(count)]
 
-@EntityCache(capacity=256)
-def calculate_hitbox_mesh(entity_id, scale_factor):
-    # Simulated expensive geometry generation
-    time.sleep(0.01)
-    return f"mesh_data_{entity_id}_{scale_factor}"
+def clamp(value, low, high):
+    return max(low, min(value, high))
 
-def batch_process_entities(entities):
-    return [calculate_hitbox_mesh(e, 1.0) for e in entities]
+def chunk_list(data, size):
+    return [data[i:i + size] for i in range(0, len(data), size)]
 
-if __name__ == '__main__':
-    data = list(range(100))
-    start = time.perf_counter()
-    batch_process_entities(data)
-    batch_process_entities(data)
-    print(f"optimized mesh generation in {time.perf_counter() - start:.4f}s")
+def lerp_color(c1, c2, t):
+    t = clamp(t, 0.0, 1.0)
+    return tuple(int(a + (b - a) * t) for a, b in zip(c1, c2))
+
+def format_inventory(items):
+    return ' | '.join([f'[{i.upper()}]' for i in items])
+
+class EntityPool:
+    def __init__(self, capacity=100):
+        self.pool = [None] * capacity
+        
+    def spawn(self, entity):
+        for i, slot in enumerate(self.pool):
+            if slot is None:
+                self.pool[i] = entity
+                return i
+        return -1
