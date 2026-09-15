@@ -1,39 +1,37 @@
 import time
-import random
-from functools import wraps
+import functools
+import logging
 
-def gaming_timer(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        start = time.perf_counter()
-        result = func(*args, **kwargs)
-        print(f'[METRIC] {func.__name__} latency: {time.perf_counter() - start:.6f}s')
-        return result
-    return wrapper
+logger = logging.getLogger('python-utils-71')
 
-def roll_dice(sides=6, count=1):
-    return [random.randint(1, sides) for _ in range(count)]
+def retry_network_op(attempts=3, delay=1.0, backoff=2):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            tries, current_delay = attempts, delay
+            while tries > 0:
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    tries -= 1
+                    if tries == 0:
+                        logger.error(f'operation failed after {attempts} attempts')
+                        raise e
+                    logger.warning(f'retry {attempts - tries} due to {e}')
+                    time.sleep(current_delay)
+                    current_delay *= backoff
+        return wrapper
+    return decorator
 
-def clamp(value, low, high):
-    return max(low, min(value, high))
+class ConnectionChaos:
+    def __init__(self, fail_rate=0.5):
+        self.fail_rate = fail_rate
 
-def chunk_list(data, size):
-    return [data[i:i + size] for i in range(0, len(data), size)]
-
-def lerp_color(c1, c2, t):
-    t = clamp(t, 0.0, 1.0)
-    return tuple(int(a + (b - a) * t) for a, b in zip(c1, c2))
-
-def format_inventory(items):
-    return ' | '.join([f'[{i.upper()}]' for i in items])
-
-class EntityPool:
-    def __init__(self, capacity=100):
-        self.pool = [None] * capacity
-        
-    def spawn(self, entity):
-        for i, slot in enumerate(self.pool):
-            if slot is None:
-                self.pool[i] = entity
-                return i
-        return -1
+    def __call__(self, func):
+        import random
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            if random.random() < self.fail_rate:
+                raise ConnectionError('simulated network instability')
+            return func(*args, **kwargs)
+        return wrapper
