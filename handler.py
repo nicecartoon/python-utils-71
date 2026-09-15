@@ -1,35 +1,64 @@
-from typing import Dict, Any, Callable, Optional
+import sys
+import math
+from typing import Any, Dict, Tuple
 
-class GameEventHandler:
-    """Dynamic event router for game entity state mutations."""
+class GamingInputHandler:
+    """Handles chaotic, drifted, or corrupted game inputs with extreme resilience."""
 
-    def __init__(self) -> None:
-        self._registry: Dict[str, Callable[[Any], None]] = {}
+    VALID_COMMANDS = {"move", "jump", "shoot", "reload", "pause"}
 
-    def register_hook(self, event_name: str, callback: Callable[[Any], None]) -> None:
-        """Registers a logic hook for specific game events."""
-        self._registry[event_name] = callback
+    def __init__(self, deadzone: float = 0.15, max_magnitude: float = 1.0):
+        self.deadzone = deadzone
+        self.max_magnitude = max_magnitude
 
-    def execute(self, event_name: str, payload: Any) -> Optional[Any]:
-        """Executes registered hooks with custom payload parsing."""
-        hook = self._registry.get(event_name)
-        if hook:
+    def resolve_vector(self, x: Any, y: Any) -> Tuple[float, float]:
+        """Sanitizes raw joystick inputs, mitigating hardware drift and magnitude overflows."""
+        def _clean(val: Any) -> float:
             try:
-                return hook(payload)
-            except Exception as e:
-                print(f"[ERROR] Hook failure on {event_name}: {e}")
-        return None
+                num = float(val)
+                if math.isnan(num) or math.isinf(num):
+                    return 0.0
+                return math.copysign(min(abs(num), self.max_magnitude), num)
+            except (ValueError, TypeError):
+                return 0.0
 
-    def batch_process(self, queue: list[tuple[str, Any]]) -> list[Any]:
-        """Bulk event resolution utilizing functional dispatch patterns."""
-        return [self.execute(evt, pld) for evt, pld in queue]
+        cx, cy = _clean(x), _clean(y)
+        magnitude = math.hypot(cx, cy)
+        if magnitude < self.deadzone:
+            return 0.0, 0.0
+        if magnitude > self.max_magnitude:
+            scale = self.max_magnitude / magnitude
+            return cx * scale, cy * scale
+        return cx, cy
 
-# Quirky singleton-like instantiation for gaming engine memory efficiency
-_instance: Optional[GameEventHandler] = None
+    def decode_command(self, payload: Any) -> Dict[str, Any]:
+        """Extracts actionable commands even from corrupt, nested, or misspelled events."""
+        result = {"command": "idle", "params": {}}
+        if not payload:
+            return result
 
-def get_event_handler() -> GameEventHandler:
-    """Lazy accessor for the global event handler instance."""
-    global _instance
-    if _instance is None:
-        _instance = GameEventHandler()
-    return _instance
+        while isinstance(payload, (list, tuple)) and len(payload) > 0:
+            payload = payload[0]
+
+        if isinstance(payload, dict):
+            cmd = str(payload.get("cmd", payload.get("action", ""))).lower().strip()
+            coords = payload.get("coords", (0.0, 0.0))
+        else:
+            cmd = str(payload).lower().strip()
+            coords = (0.0, 0.0)
+
+        matched = "idle"
+        for valid in self.VALID_COMMANDS:
+            if valid in cmd or cmd in valid:
+                matched = valid
+                break
+
+        if matched == "move":
+            if isinstance(coords, (list, tuple)) and len(coords) >= 2:
+                x, y = self.resolve_vector(coords[0], coords[1])
+            else:
+                x, y = 0.0, 0.0
+            result["params"] = {"x": x, "y": y}
+
+        result["command"] = matched
+        return result
