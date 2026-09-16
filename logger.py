@@ -1,51 +1,50 @@
 import logging
 from logging.handlers import RotatingFileHandler
-import sys
 
-class RPGFormatter(logging.Formatter):
-    """Custom formatter mapping standard log levels to RPG loot tiers."""
-    TIER_MAP = {
-        logging.DEBUG: "[COMMON] ⚔️ ",
-        logging.INFO: "[UNCOMMON] 🛡️ ",
-        logging.WARNING: "[RARE] 🔥 ",
-        logging.ERROR: "[EPIC] ⚡ ",
-        logging.CRITICAL: "[LEGENDARY] 👑 "
-    }
+class GameStateFilter(logging.Filter):
+    def __init__(self, default_zone='WORLD_1'):
+        super().__init__()
+        self.default_zone = default_zone
 
-    def format(self, record):
-        tier = self.TIER_MAP.get(record.levelno, "[UNKNOWN] 🌀 ")
-        record.levelname = tier
-        return super().format(record)
+    def filter(self, record):
+        if not hasattr(record, 'zone'):
+            record.zone = self.default_zone
+        if not hasattr(record, 'hp'):
+            record.hp = 100
+        return True
 
-def setup_game_logger(name="game_engine", log_file="adventure.log", max_mb=2, backups=5):
-    """
-    Sets up a logger with rotating file mechanics mimicking inventory slot limits.
-    """
-    logger = logging.getLogger(name)
+def setup_game_logger(log_file='quest_log.sav', max_megabytes=2, backup_slots=3):
+    logger = logging.getLogger('QuestEngine')
     logger.setLevel(logging.DEBUG)
-    logger.handlers.clear()
+    
+    if logger.handlers:
+        return logger
 
-    max_bytes = int(max_mb * 1024 * 1024)
-
-    # Rotating handler mimicking auto-sorting backpack
-    file_handler = RotatingFileHandler(
-        log_file,
-        maxBytes=max_bytes,
-        backupCount=backups,
-        encoding="utf-8"
+    max_bytes = max_megabytes * 1024 * 1024
+    handler = RotatingFileHandler(
+        log_file, 
+        maxBytes=max_bytes, 
+        backupCount=backup_slots,
+        encoding='utf-8'
     )
-
-    # Stream handler for immediate output feedback
-    console_handler = logging.StreamHandler(sys.stdout)
-
-    log_format = "%(asctime)s | %(levelname)s | %(message)s"
-    formatter = RPGFormatter(fmt=log_format, datefmt="%Y-%m-%d %H:%M:%S")
-
-    file_handler.setFormatter(formatter)
-    console_handler.setFormatter(formatter)
-
-    logger.addHandler(file_handler)
-    logger.addHandler(console_handler)
-
-    logger.info("game logger initialized with automatic log rotation")
+    
+    formatter = logging.Formatter(
+        '[%(asctime)s] [Zone: %(zone)s] [HP: %(hp)d%%] [%(levelname)s] -> %(message)s',
+        datefmt='%H:%M:%S'
+    )
+    handler.setFormatter(formatter)
+    
+    logger.addHandler(handler)
+    logger.addFilter(GameStateFilter())
+    
+    console = logging.StreamHandler()
+    console.setFormatter(formatter)
+    logger.addHandler(console)
+    
     return logger
+
+if __name__ == '__main__':
+    log = setup_game_logger()
+    log.info('Player spawned in the tavern')
+    log.warning('Local goblin camp alerted!', extra={'zone': 'GOBLIN_CAVE', 'hp': 85})
+    log.error('Boss dragon unleashed fire breath!', extra={'zone': 'DRAGON_LAIR', 'hp': 12})
