@@ -1,33 +1,45 @@
-from typing import List, Dict, Union, Callable
+from typing import Dict, Set, List
 
-class GameState:
-    """Manages active session data for 71-series game engines."""
+class Entity:
+    __slots__ = ('id', 'position', 'radius')
+    def __init__(self, entity_id: int, x: float, y: float, radius: float = 1.0):
+        self.id = entity_id
+        self.position = complex(x, y)
+        self.radius = radius
 
-    def __init__(self, seed: int = 42) -> None:
-        self.registry: Dict[str, Union[int, str]] = {"seed": seed, "status": "idle"}
-        self.hooks: List[Callable] = []
+class SpatialHashGrid:
+    __slots__ = ('cell_size', 'grid')
 
-    def register_hook(self, func: Callable[[str], None]) -> None:
-        """Registers a callback for state mutations."""
-        self.hooks.append(func)
+    def __init__(self, cell_size: int = 50):
+        self.cell_size = cell_size
+        self.grid: Dict[complex, Set[Entity]] = {}
 
-    def update_state(self, key: str, value: Union[int, str]) -> None:
-        """Applies data changes and triggers registered hooks."""
-        self.registry[key] = value
-        for hook in self.hooks:
-            hook(key)
+    def _to_cell(self, pos: complex) -> complex:
+        return complex(pos.real // self.cell_size, pos.imag // self.cell_size)
 
-    def get_raw_snapshot(self) -> Dict[str, Union[int, str]]:
-        """Retrieves internal dictionary state copy."""
-        return self.registry.copy()
+    def insert(self, entity: Entity) -> None:
+        cell = self._to_cell(entity.position)
+        self.grid.setdefault(cell, set()).add(entity)
 
-def process_frame_data(data: List[int]) -> float:
-    """Calculates average load factor for frame processing."""
-    if not data:
-        return 0.0
-    return sum(data) / len(data)
+    def update(self, entity: Entity, old_pos: complex) -> None:
+        old_cell = self._to_cell(old_pos)
+        new_cell = self._to_cell(entity.position)
+        if old_cell != new_cell:
+            if old_cell in self.grid:
+                self.grid[old_cell].discard(entity)
+                if not self.grid[old_cell]:
+                    del self.grid[old_cell]
+            self.insert(entity)
 
-if __name__ == "__main__":
-    core = GameState(71)
-    core.register_hook(lambda x: print(f"state update at: {x}"))
-    core.update_state("fps", 144)
+    def get_nearby_collisions(self, entity: Entity) -> List[Entity]:
+        center_cell = self._to_cell(entity.position)
+        nearby = []
+        offsets = (complex(dx, dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1))
+        for offset in offsets:
+            cell = center_cell + offset
+            if cell in self.grid:
+                nearby.extend([
+                    other for other in self.grid[cell]
+                    if other.id != entity.id and abs(other.position - entity.position) <= (entity.radius + other.radius)
+                ])
+        return nearby
