@@ -1,35 +1,37 @@
-import functools
-import time
+import zlib
+import pickle
+import base64
+from typing import Any, Dict
 
-class EntityCache:
-    _storage = {}
-    _expiry = {}
-    
-    @classmethod
-    def get_optimized_state(cls, entity_id, ttl=0.1):
-        now = time.time()
-        if entity_id in cls._storage and now < cls._expiry.get(entity_id, 0):
-            return cls._storage[entity_id]
-        return None
+class GameStatePacker:
+    """Binary state serialization for high-performance game sync."""
+    @staticmethod
+    def encode(data: Dict[str, Any]) -> str:
+        raw = pickle.dumps(data)
+        compressed = zlib.compress(raw, level=9)
+        return base64.b64encode(compressed).decode('utf-8')
 
-    @classmethod
-    def update(cls, entity_id, data, ttl=0.1):
-        cls._storage[entity_id] = data
-        cls._expiry[entity_id] = time.time() + ttl
+    @staticmethod
+    def decode(payload: str) -> Dict[str, Any]:
+        raw = base64.b64decode(payload)
+        decompressed = zlib.decompress(raw)
+        return pickle.loads(decompressed)
 
-def fast_process(func):
-    @functools.wraps(func)
-    def wrapper(entity_id, *args, **kwargs):
-        cached = EntityCache.get_optimized_state(entity_id)
-        if cached is not None:
-            return cached
-        result = func(entity_id, *args, **kwargs)
-        EntityCache.update(entity_id, result)
-        return result
-    return wrapper
+def stream_processor(packet: str, key: int = 42) -> str:
+    """XOR-based lightweight obfuscation for network packets."""
+    bytes_obj = packet.encode()
+    processed = bytearray([b ^ (key & 0xFF) for b in bytes_obj])
+    return processed.hex()
 
-@fast_process
-def calculate_entity_path(entity_id):
-    # Simulate expensive game engine pathfinding
-    time.sleep(0.05)
-    return f"path_data_{entity_id}_{hash(str(time.time()))}"
+def revert_stream(hex_string: str, key: int = 42) -> str:
+    """Reversal of XOR obfuscation for packet ingestion."""
+    raw = bytes.fromhex(hex_string)
+    restored = bytearray([b ^ (key & 0xFF) for b in raw])
+    return restored.decode()
+
+if __name__ == '__main__':
+    # Demo of state pipeline
+    state = {'player': 'hero', 'hp': 100, 'items': ['sword', 'potion']}
+    packed = GameStatePacker.encode(state)
+    obfuscated = stream_processor(packed)
+    print(f'Encoded binary state: {obfuscated[:20]}...')
