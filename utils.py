@@ -1,37 +1,24 @@
-import time
-import functools
-import logging
+import random
+from typing import List, Dict, Union, Optional
 
-logger = logging.getLogger('python-utils-71')
+GameStats = Dict[str, Union[int, float]]
 
-def retry_network_op(attempts=3, delay=1.0, backoff=2):
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            tries, current_delay = attempts, delay
-            while tries > 0:
-                try:
-                    return func(*args, **kwargs)
-                except Exception as e:
-                    tries -= 1
-                    if tries == 0:
-                        logger.error(f'operation failed after {attempts} attempts')
-                        raise e
-                    logger.warning(f'retry {attempts - tries} due to {e}')
-                    time.sleep(current_delay)
-                    current_delay *= backoff
-        return wrapper
-    return decorator
+def calculate_loot_drop(rarity_weights: Dict[str, float], luck_modifier: float = 1.0) -> str:
+    """Determines item rarity based on weight and player luck factor."""
+    adjusted_weights = {k: v * luck_modifier for k, v in rarity_weights.items()}
+    total = sum(adjusted_weights.values())
+    pick = random.uniform(0, total)
+    current = 0.0
+    for rarity, weight in adjusted_weights.items():
+        current += weight
+        if pick <= current:
+            return rarity
+    return "common"
 
-class ConnectionChaos:
-    def __init__(self, fail_rate=0.5):
-        self.fail_rate = fail_rate
+def normalize_xp_curve(levels: List[int], exponent: float = 1.5) -> List[int]:
+    """Transformation of level progression into exponential growth integers."""
+    return [int(lvl ** exponent) for lvl in levels]
 
-    def __call__(self, func):
-        import random
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            if random.random() < self.fail_rate:
-                raise ConnectionError('simulated network instability')
-            return func(*args, **kwargs)
-        return wrapper
+def batch_process_entities(entities: List[Dict[str, any]], action_func: callable) -> List[any]:
+    """Functional pipeline application for game entity collections."""
+    return [action_func(e) for e in entities if 'active' in e and e['active']]
