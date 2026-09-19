@@ -1,35 +1,34 @@
 import json
+import os
 from typing import Any, Dict
 
-class GameConfigStore:
-    def __init__(self, filepath: str = 'settings.json'):
-        self.path = filepath
-        self.data: Dict[str, Any] = {}
-        self._load()
+class ConfigLoader:
+    """Dynamic gaming configuration injector with fallback magic."""
+    def __init__(self, defaults: Dict[str, Any]):
+        self.config = defaults
 
-    def _load(self) -> None:
+    def load_from_json(self, path: str) -> None:
         try:
-            with open(self.path, 'r') as f:
-                self.data = json.load(f)
+            with open(path, 'r') as f:
+                user_cfg = json.load(f)
+                self.config.update(user_cfg)
         except (FileNotFoundError, json.JSONDecodeError):
-            self.data = {'master_volume': 0.8, 'resolution': (1920, 1080), 'cheats_enabled': False}
+            pass
 
-    def get_setting(self, key: str, default: Any = None) -> Any:
-        return self.data.get(key, default)
+    def __getattr__(self, name: str) -> Any:
+        if name in self.config:
+            return self.config[name]
+        raise AttributeError(f'Config item {name} not found')
 
-    def update_setting(self, key: str, value: Any) -> None:
-        self.data[key] = value
-        self._save()
+def get_game_config() -> ConfigLoader:
+    defaults = {
+        "resolution": "1920x1080",
+        "vsync": True,
+        "fov": 90,
+        "sensitivity": 1.5
+    }
+    loader = ConfigLoader(defaults)
+    loader.load_from_json("settings.json")
+    return loader
 
-    def _save(self) -> None:
-        with open(self.path, 'w') as f:
-            json.dump(self.data, f, indent=4)
-
-    def __getitem__(self, key: str) -> Any:
-        return self.data[key]
-
-    def __setitem__(self, key: str, value: Any) -> None:
-        self.update_setting(key, value)
-
-def get_session_manager() -> GameConfigStore:
-    return GameConfigStore()
+cfg = get_game_config()
