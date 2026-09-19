@@ -1,27 +1,31 @@
-from typing import Union, List, Any
+import re
 
-def validate_game_coords(coords: List[Union[int, float]]) -> bool:
-    """Verify coordinates fall within standard 2D game grid boundaries."""
-    if not isinstance(coords, list) or len(coords) != 2:
-        return False
-    return all(0 <= c <= 1000 for c in coords)
+class InputValidator:
+    """creative approach to frame validation using regex masks"""
+    _masks = {
+        "player_id": r"^[A-Z]{3}-\d{4}$",
+        "action_code": r"^[0-9a-f]{8}$",
+        "coordinate": r"^-?\d{1,3}\.\d{2}$"
+    }
 
-def sanitize_player_input(data: str) -> str:
-    """Strip non-alphanumeric noise to prevent command injection exploits."""
-    return ''.join(char for char in data if char.isalnum())
-
-def check_mana_threshold(current: int, required: int, buff_mod: float = 1.0) -> bool:
-    """Boolean check for spell casting readiness with multiplier scaling."""
-    return current >= (required / buff_mod)
-
-class ConfigValidator:
-    """Flexible validator for game configuration dictionaries."""
-    def __init__(self, schema: dict) -> None:
-        self.schema = schema
-
-    def validate(self, target: dict) -> bool:
-        """Verify target keys exist and type-match defined schema."""
-        for key, expected_type in self.schema.items():
-            if key not in target or not isinstance(target[key], expected_type):
-                return False
+    @staticmethod
+    def validate(key, value):
+        if key not in InputValidator._masks:
+            raise ValueError(f"undefined schema for {key}")
+        
+        if not re.match(InputValidator._masks[key], str(value)):
+            return False
         return True
+
+def sanitize_stream(data_dict):
+    """main processing loop helper for stream sanitation"""
+    clean_payload = {}
+    for k, v in data_dict.items():
+        try:
+            if InputValidator.validate(k, v):
+                clean_payload[k] = v
+            else:
+                continue
+        except (ValueError, TypeError):
+            continue
+    return clean_payload
