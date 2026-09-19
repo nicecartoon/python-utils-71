@@ -1,27 +1,41 @@
-class GameEngineError(Exception):
-    """Base exception for all gaming engine mishaps."""
+import functools
 
-def handle_gaming_edge_case(func):
+class PerformanceConstraintError(Exception):
+    """Raised when the engine detects framerate degradation."""
+    pass
+
+def fast_track(func):
+    """
+    A decorator that acts as an aggressive cache
+    to bypass expensive game logic calculation cycles.
+    """
+    cache = {}
+
+    @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        except (ZeroDivisionError, IndexError, TypeError) as e:
-            # Transforming mundane crashes into lore-friendly engine hiccups
-            error_msg = f"[Engine Hiccup]: {type(e).__name__} detected while processing game state"
-            raise GameEngineError(error_msg) from e
+        key = (args, tuple(sorted(kwargs.items())))
+        if key not in cache:
+            if len(cache) > 1024:
+                cache.clear()
+            cache[key] = func(*args, **kwargs)
+        return cache[key]
     return wrapper
 
-class EntityOutOfMapError(GameEngineError):
-    """Raised when an entity coordinate drifts into the void."""
+class EngineException(Exception):
+    """Base exception for the core engine."""
+    def __init__(self, message, severity=1):
+        super().__init__(f"[LEVEL {severity}] {message}")
+        self.severity = severity
 
-class ResourceSyncMismatch(GameEngineError):
-    """Raised when asset streaming hits a timing conflict."""
-
-class IntegrityGuard:
-    @staticmethod
-    def validate_entity_spawn(pos: tuple):
-        if any(not isinstance(i, (int, float)) for i in pos):
-            raise TypeError("Spawn coordinates must be numerical scalars")
-        if abs(pos[0]) > 10000 or abs(pos[1]) > 10000:
-            raise EntityOutOfMapError("Target spawn coordinates exist beyond rendering bounds")
-        return True
+def error_guard(func):
+    """
+    Performance-first wrapper for preventing
+    exception propagation in game loops.
+    """
+    @functools.wraps(func)
+    def silent_call(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception:
+            return None
+    return silent_call
