@@ -1,55 +1,35 @@
 import logging
-from logging.handlers import RotatingFileHandler
-import os
-import time
+import functools
+from typing import Any, Callable
 
-class GameTickFormatter(logging.Formatter):
-    """
-    Custom formatter that injects virtual game ticks (simulated 60fps)
-    for frame-accurate debugging diagnostics.
-    """
-    def __init__(self, fmt=None, datefmt=None):
-        super().__init__(fmt, datefmt)
-        self.start_time = time.time()
+logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
+logger = logging.getLogger('python-utils-71')
 
-    def format(self, record):
-        elapsed = time.time() - self.start_time
-        current_tick = int(elapsed * 60)
-        record.tick = f"TICK:{current_tick:08d}"
-        return super().format(record)
+def validate_input(func: Callable) -> Callable:
+    @functools.wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        data = args[0] if args else kwargs.get('data')
+        if not isinstance(data, (dict, list)):
+            logger.error(f'invalid input schema: {type(data).__name__}')
+            return None
+        return func(*args, **kwargs)
+    return wrapper
 
-def setup_game_logger(
-    logger_name: str = "game_engine",
-    log_file: str = "game_session.log",
-    max_bytes: int = 1048576,
-    backup_count: int = 5
-) -> logging.Logger:
-    """
-    Sets up a rotating logger that tracks execution in virtual game ticks.
-    """
-    logger = logging.getLogger(logger_name)
-    logger.setLevel(logging.DEBUG)
-    
-    if logger.handlers:
-        return logger
+class GameProcessor:
+    def __init__(self):
+        self.active = True
 
-    log_dir = os.path.dirname(log_file)
-    if log_dir and not os.path.exists(log_dir):
-        os.makedirs(log_dir)
+    @validate_input
+    def process_tick(self, data: Any) -> None:
+        logger.info(f'processing game tick: {data}')
 
-    format_str = "[%(asctime)s] [%(tick)s] [%(levelname)s] (%(filename)s:%(lineno)d): %(message)s"
-    formatter = GameTickFormatter(format_str)
+    def run_loop(self, queue: list) -> None:
+        for item in queue:
+            if not self.active:
+                break
+            self.process_tick(item)
 
-    file_handler = RotatingFileHandler(
-        log_file, maxBytes=max_bytes, backupCount=backup_count, encoding="utf-8"
-    )
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
-
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(formatter)
-    logger.addHandler(console_handler)
-
-    return logger
+if __name__ == '__main__':
+    engine = GameProcessor()
+    input_stream = [{'cmd': 'move', 'val': 10}, 'malformed_data', {'cmd': 'jump'}]
+    engine.run_loop(input_stream)
