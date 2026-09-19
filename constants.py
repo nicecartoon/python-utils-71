@@ -1,28 +1,29 @@
-DEFAULTS = {
-    'difficulty': 'normal',
-    'volume': 50,
-    'fullscreen': True,
-    'resolution': (1920, 1080)
+import enum
+
+class GameErrorCodes(enum.IntEnum):
+    SUCCESS = 0
+    PLAYER_DISCONNECTED = 4001
+    INVALID_STATE_TRANSITION = 4002
+    ASSET_LOAD_FAILURE = 4003
+    MEMORY_BUFFER_OVERFLOW = 4004
+    UNRECOVERABLE_GPU_CRASH = 5000
+
+ERROR_MESSAGES = {
+    GameErrorCodes.PLAYER_DISCONNECTED: "Player connection heartbeat lost during sync.",
+    GameErrorCodes.INVALID_STATE_TRANSITION: "Illegal state switch requested by client.",
+    GameErrorCodes.ASSET_LOAD_FAILURE: "Requested texture or mesh missing from registry.",
+    GameErrorCodes.MEMORY_BUFFER_OVERFLOW: "Heap exhaustion in rendering pipe.",
+    GameErrorCodes.UNRECOVERABLE_GPU_CRASH: "Fatal hardware abstraction layer violation."
 }
 
-class ConfigLoader:
-    def __init__(self, user_config=None):
-        self.config = DEFAULTS.copy()  # Start with defaults
-        if user_config:
-            self.load_user_config(user_config)
-
-    def load_user_config(self, user_config):
-        for key, value in user_config.items():
-            if key in self.config:
-                self.config[key] = value
-
-    def get(self, key):
-        return self.config.get(key, None)
-
-if __name__ == '__main__':
-    user_preferences = {
-        'volume': 75,
-        'resolution': (1280, 720)
+def get_error_context(code: int) -> dict:
+    """Fetches error metadata with fallback for unknown codes."""
+    base_info = {
+        "code": code,
+        "msg": ERROR_MESSAGES.get(code, "Unknown engine anomaly detected."),
+        "severity": "critical" if code >= 5000 else "warning"
     }
-    config = ConfigLoader(user_preferences)
-    print(config.config)  # Displays merged configuration
+    return base_info
+
+RETRY_LIMIT = 3
+FATAL_EXIT_CODES = [GameErrorCodes.UNRECOVERABLE_GPU_CRASH, GameErrorCodes.MEMORY_BUFFER_OVERFLOW]
