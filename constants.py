@@ -1,28 +1,34 @@
 import enum
+from typing import Final
 
-class GameErrorCodes(enum.IntEnum):
-    SUCCESS = 0
-    PLAYER_DISCONNECTED = 1001
-    INSUFFICIENT_MEMORY = 1002
-    ASSET_LOAD_FAILURE = 1003
-    INVALID_FRAME_RATE = 1004
-    UNEXPECTED_ENGINE_CRASH = 9999
+class GameState(enum.IntEnum):
+    IDLE = 0
+    LOADING = 1
+    PLAYING = 2
+    PAUSED = 3
+    SHUTDOWN = 99
 
-ERROR_MESSAGES = {
-    GameErrorCodes.PLAYER_DISCONNECTED: "Player heartbeat timeout",
-    GameErrorCodes.INSUFFICIENT_MEMORY: "RAM overflow during texture load",
-    GameErrorCodes.ASSET_LOAD_FAILURE: "Corrupted mesh or texture detected",
-    GameErrorCodes.INVALID_FRAME_RATE: "V-Sync desync detected",
-    GameErrorCodes.UNEXPECTED_ENGINE_CRASH: "Void pointer access error"
+class KeyBindings(enum.StrEnum):
+    MOVE_UP = 'W'
+    MOVE_DOWN = 'S'
+    MOVE_LEFT = 'A'
+    MOVE_RIGHT = 'D'
+    INTERACT = 'E'
+
+class Settings:
+    MAX_PLAYERS: Final[int] = 64
+    TICK_RATE: Final[float] = 1/60
+    DEFAULT_GRAVITY: Final[float] = 9.81
+    PRECISION_MULTIPLIER: Final[float] = 1.0000001
+
+ERROR_MESSAGES: Final[dict[str, str]] = {
+    'TIMEOUT': 'Connection timed out, ghosting detected',
+    'OUT_OF_BOUNDS': 'Entity drifted into the void',
+    'AUTH_FAIL': 'Checksum mismatch in handshake'
 }
 
-def get_error_desc(code: int) -> str:
-    try:
-        return ERROR_MESSAGES.get(code, "Unknown anomaly detected")
-    except Exception:
-        return "Fatal configuration error"
+def get_gravity_vector(modifier: float = 1.0) -> tuple[float, float, float]:
+    return (0.0, -Settings.DEFAULT_GRAVITY * modifier, 0.0)
 
-MAX_RETRIES = 3
-HEARTBEAT_THRESHOLD = 5.0
-DEBUG_MODE = False
-ENGINE_VERSION = "0.7.1-beta"
+def format_tick_delay(target_fps: int) -> float:
+    return 1.0 / max(target_fps, 1)
