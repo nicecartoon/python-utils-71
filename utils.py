@@ -1,25 +1,29 @@
-import sys
+import time
+import functools
+import random
 
-def validate_game_input(user_input, valid_range=(1, 99)):
-    try:
-        value = int(user_input)
-        if not (valid_range[0] <= value <= valid_range[1]):
-            raise ValueError
-        return value
-    except (ValueError, TypeError):
-        return None
+def retry_operation(max_attempts=3, delay=1.0, backoff=2.0):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            attempts = 0
+            current_delay = delay
+            while attempts < max_attempts:
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    attempts += 1
+                    if attempts == max_attempts:
+                        raise e
+                    time.sleep(current_delay + random.uniform(0, 0.1))
+                    current_delay *= backoff
+        return wrapper
+    return decorator
 
-def process_game_loop(data_stream):
-    results = []
-    for entry in data_stream:
-        clean_val = validate_game_input(entry)
-        if clean_val is not None:
-            results.append(clean_val * 42)
-        else:
-            sys.stderr.write(f'Skipping corrupted telemetry: {entry}\n')
-    return results
-
-if __name__ == '__main__':
-    raw_data = ['10', '50', 'invalid', '99', '100', '0']
-    processed = process_game_loop(raw_data)
-    print(f'Syncing verified packets: {processed}')
+class NetworkHandler:
+    @retry_operation(max_attempts=4, delay=0.5)
+    def fetch_game_data(self, endpoint):
+        # Simulate unstable gaming server latency
+        if random.random() < 0.7:
+            raise ConnectionError('Server timeout')
+        return {'status': 'success', 'data': 'payload_packet'}
