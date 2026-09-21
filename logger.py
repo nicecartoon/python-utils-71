@@ -1,35 +1,34 @@
-import logging
-import functools
-from typing import Any, Callable
+import sys
+from typing import Any
 
-logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
-logger = logging.getLogger('python-utils-71')
+class CombatLogger:
+    """A visual, dynamic log processor for real-time RPG combat events."""
 
-def validate_input(func: Callable) -> Callable:
-    @functools.wraps(func)
-    def wrapper(*args: Any, **kwargs: Any) -> Any:
-        data = args[0] if args else kwargs.get('data')
-        if not isinstance(data, (dict, list)):
-            logger.error(f'invalid input schema: {type(data).__name__}')
-            return None
-        return func(*args, **kwargs)
-    return wrapper
+    SYMBOLS = {
+        "damage": "⚔️",
+        "heal": "💖",
+        "buff": "🛡️",
+        "system": "⚙️"
+    }
 
-class GameProcessor:
-    def __init__(self):
-        self.active = True
+    def __init__(self, stream=sys.stdout):
+        self.stream = stream
 
-    @validate_input
-    def process_tick(self, data: Any) -> None:
-        logger.info(f'processing game tick: {data}')
+    def __getattr__(self, name: str):
+        if name in self.SYMBOLS:
+            return lambda msg, **kwargs: self._log(name, msg, **kwargs)
+        raise AttributeError(f"'CombatLogger' object has no attribute '{name}'")
 
-    def run_loop(self, queue: list) -> None:
-        for item in queue:
-            if not self.active:
-                break
-            self.process_tick(item)
+    def _log(self, event_type: str, message: str, **kwargs: Any):
+        symbol = self.SYMBOLS.get(event_type, "📝")
+        bar_str = ""
+        if "val" in kwargs and "max_val" in kwargs:
+            val = max(0, min(kwargs["val"], kwargs["max_val"]))
+            max_val = kwargs["max_val"]
+            filled = int((val / max_val) * 10) if max_val > 0 else 0
+            bar_str = f" [{'#' * filled}{'-' * (10 - filled)}] ({val}/{max_val})"
 
-if __name__ == '__main__':
-    engine = GameProcessor()
-    input_stream = [{'cmd': 'move', 'val': 10}, 'malformed_data', {'cmd': 'jump'}]
-    engine.run_loop(input_stream)
+        target = f" -> [{kwargs['target']}]" if "target" in kwargs else ""
+        log_line = f"[{symbol} {event_type.upper()}]{target} {message}{bar_str}\n"
+        self.stream.write(log_line)
+        self.stream.flush()
