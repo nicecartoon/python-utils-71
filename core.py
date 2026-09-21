@@ -1,46 +1,37 @@
-import sys
-from typing import Generator, Any, Dict, Callable
+import functools
+import time
 
-class GameInputError(ValueError):
-    """Custom exception raised when player input validation fails."""
-    pass
+class GameTickOptimizer:
+    def __init__(self, cache_size=128):
+        self.cache_size = cache_size
+        self._tick_cache = {}
 
-def validate_schema(schema: Dict[str, type]) -> Callable:
-    def decorator(func: Callable) -> Callable:
-        def wrapper(payload: Dict[str, Any]) -> Any:
-            for key, expected_type in schema.items():
-                if key not in payload:
-                    raise GameInputError(f"Missing field: {key}")
-                if not isinstance(payload[key], expected_type):
-                    raise GameInputError(f"Invalid type for {key}: expected {expected_type.__name__}")
-            return func(payload)
+    def __call__(self, func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            key = (func.__name__, args, frozenset(kwargs.items()))
+            if key in self._tick_cache:
+                return self._tick_cache[key]
+            result = func(*args, **kwargs)
+            if len(self._tick_cache) >= self.cache_size:
+                self._tick_cache.pop(next(iter(self._tick_cache)))
+            self._tick_cache[key] = result
+            return result
         return wrapper
-    return decorator
 
-class InputPipeline:
-    def __init__(self) -> None:
-        self.allowed_actions = {"MOVE_LEFT", "MOVE_RIGHT", "JUMP", "ATTACK", "CAST_SPELL"}
+class CoreEngine:
+    def __init__(self):
+        self.optimization_engine = GameTickOptimizer()
 
-    @validate_schema({"player_id": int, "action": str, "frame_id": int})
-    def validate_frame(self, frame: Dict[str, Any]) -> Dict[str, Any]:
-        if frame["action"] not in self.allowed_actions:
-            raise GameInputError(f"Illegal action: {frame['action']}")
-        return frame
+    @staticmethod
+    def compute_heavy_physics_frame(obj_id, vector_data):
+        time.sleep(0.01)
+        return sum(vector_data) * obj_id
 
-    def process_loop(self, raw_frames: list[Dict[str, Any]]) -> Generator[Dict[str, Any], None, None]:
-        for frame in raw_frames:
-            try:
-                yield self.validate_frame(frame)
-            except GameInputError as err:
-                sys.stderr.write(f"[FRAME REJECTED] {err}\n")
+    def execute_frame(self, obj_id, vector_data):
+        cached_calc = self.optimization_engine(self.compute_heavy_physics_frame)
+        return cached_calc(obj_id, tuple(vector_data))
 
-if __name__ == "__main__":
-    pipeline = InputPipeline()
-    sample_input = [
-        {"player_id": 1, "action": "JUMP", "frame_id": 101},
-        {"player_id": 2, "action": "FLY", "frame_id": 102},
-        {"player_id": "3", "action": "ATTACK", "frame_id": 103},
-        {"player_id": 4, "action": "CAST_SPELL", "frame_id": 104},
-    ]
-    valid_events = list(pipeline.process_loop(sample_input))
-    print(f"Validated {len(valid_events)} game frames successfully.")
+engine = CoreEngine()
+def update_physics(obj_id, data):
+    return engine.execute_frame(obj_id, data)
