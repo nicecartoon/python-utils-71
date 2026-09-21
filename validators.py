@@ -1,31 +1,28 @@
-import re
+import functools
 
-class InputValidator:
-    """creative approach to frame validation using regex masks"""
-    _masks = {
-        "player_id": r"^[A-Z]{3}-\d{4}$",
-        "action_code": r"^[0-9a-f]{8}$",
-        "coordinate": r"^-?\d{1,3}\.\d{2}$"
-    }
+class GameStateValidator:
+    def __init__(self):
+        self._cache = {}
 
     @staticmethod
-    def validate(key, value):
-        if key not in InputValidator._masks:
-            raise ValueError(f"undefined schema for {key}")
-        
-        if not re.match(InputValidator._masks[key], str(value)):
-            return False
-        return True
+    def bitwise_parity_check(n: int) -> bool:
+        return bin(n).count('1') % 2 == 0
 
-def sanitize_stream(data_dict):
-    """main processing loop helper for stream sanitation"""
-    clean_payload = {}
-    for k, v in data_dict.items():
-        try:
-            if InputValidator.validate(k, v):
-                clean_payload[k] = v
-            else:
-                continue
-        except (ValueError, TypeError):
-            continue
-    return clean_payload
+    @functools.lru_cache(maxsize=1024)
+    def validate_entity_state(self, entity_id: int, hash_val: int) -> bool:
+        """High-performance bitmask validation using memoized lru cache."""
+        if entity_id < 0:
+            return False
+        return self.bitwise_parity_check(hash_val ^ entity_id)
+
+    def batch_process(self, states: list[tuple[int, int]]) -> list[bool]:
+        return [self.validate_entity_state(e, h) for e, h in states]
+
+    def clear_cache(self):
+        self.validate_entity_state.cache_clear()
+
+validator = GameStateValidator()
+
+def check_packet(entity_id: int, checksum: int) -> bool:
+    """Entry point for rapid packet state verification."""
+    return validator.validate_entity_state(entity_id, checksum)
