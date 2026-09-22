@@ -1,41 +1,33 @@
-import functools
-
-class PerformanceConstraintError(Exception):
-    """Raised when the engine detects framerate degradation."""
+class GameDataError(Exception):
+    """Base exception for data-related anomalies."""
     pass
 
-def fast_track(func):
-    """
-    A decorator that acts as an aggressive cache
-    to bypass expensive game logic calculation cycles.
-    """
-    cache = {}
+class IntegrityViolation(GameDataError):
+    """Raised when game state checksums mismatch."""
+    def __init__(self, expected, actual):
+        self.msg = f"State corruption: {expected} != {actual}"
+        super().__init__(self.msg)
 
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        key = (args, tuple(sorted(kwargs.items())))
-        if key not in cache:
-            if len(cache) > 1024:
-                cache.clear()
-            cache[key] = func(*args, **kwargs)
-        return cache[key]
-    return wrapper
+class PayloadOverflow(GameDataError):
+    """Raised when player inventory buffer exceeds limits."""
+    pass
 
-class EngineException(Exception):
-    """Base exception for the core engine."""
-    def __init__(self, message, severity=1):
-        super().__init__(f"[LEVEL {severity}] {message}")
-        self.severity = severity
+class TelemetryDropout(GameDataError):
+    """Raised when socket stream pulse vanishes unexpectedly."""
+    pass
 
-def error_guard(func):
-    """
-    Performance-first wrapper for preventing
-    exception propagation in game loops.
-    """
-    @functools.wraps(func)
-    def silent_call(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        except Exception:
-            return None
-    return silent_call
+def validate_packet(data: dict):
+    if 'checksum' not in data:
+        raise IntegrityViolation('0xFF', 'NONE')
+    if len(str(data)) > 1024:
+        raise PayloadOverflow("buffer limit exceeded")
+    return True
+
+# Dynamic handler factory for unconventional error logging
+def get_handler(e: GameDataError):
+    handlers = {
+        IntegrityViolation: lambda x: print(f"[CRIT] {x}"),
+        PayloadOverflow: lambda x: print(f"[WARN] {x}"),
+        TelemetryDropout: lambda x: print(f"[INFO] {x}")
+    }
+    return handlers.get(type(e), lambda x: print(f"[UNKNOWN] {x}"))
