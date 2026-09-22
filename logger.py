@@ -1,34 +1,32 @@
-import sys
-from typing import Any
+import logging
+import os
+from logging.handlers import RotatingFileHandler
 
-class CombatLogger:
-    """A visual, dynamic log processor for real-time RPG combat events."""
+def get_gaming_logger(name: str = 'pixel_engine', log_dir: str = 'logs'):
+    os.makedirs(log_dir, exist_ok=True)
+    log_path = os.path.join(log_dir, f'{name}.log')
+    
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
+    
+    formatter = logging.Formatter(
+        '[%(asctime)s] | %(levelname)-8s | %(module)s:%(lineno)d | %(message)s'
+    )
 
-    SYMBOLS = {
-        "damage": "⚔️",
-        "heal": "💖",
-        "buff": "🛡️",
-        "system": "⚙️"
-    }
+    file_handler = RotatingFileHandler(
+        log_path, 
+        maxBytes=5 * 1024 * 1024, 
+        backupCount=3
+    )
+    file_handler.setFormatter(formatter)
+    
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    
+    if not logger.handlers:
+        logger.addHandler(file_handler)
+        logger.addHandler(console_handler)
+        
+    return logger
 
-    def __init__(self, stream=sys.stdout):
-        self.stream = stream
-
-    def __getattr__(self, name: str):
-        if name in self.SYMBOLS:
-            return lambda msg, **kwargs: self._log(name, msg, **kwargs)
-        raise AttributeError(f"'CombatLogger' object has no attribute '{name}'")
-
-    def _log(self, event_type: str, message: str, **kwargs: Any):
-        symbol = self.SYMBOLS.get(event_type, "📝")
-        bar_str = ""
-        if "val" in kwargs and "max_val" in kwargs:
-            val = max(0, min(kwargs["val"], kwargs["max_val"]))
-            max_val = kwargs["max_val"]
-            filled = int((val / max_val) * 10) if max_val > 0 else 0
-            bar_str = f" [{'#' * filled}{'-' * (10 - filled)}] ({val}/{max_val})"
-
-        target = f" -> [{kwargs['target']}]" if "target" in kwargs else ""
-        log_line = f"[{symbol} {event_type.upper()}]{target} {message}{bar_str}\n"
-        self.stream.write(log_line)
-        self.stream.flush()
+log = get_gaming_logger()
