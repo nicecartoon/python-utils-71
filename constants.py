@@ -1,34 +1,35 @@
-import enum
-from typing import Final
+from typing import Final, Dict, Tuple
 
-class GameState(enum.IntEnum):
-    IDLE = 0
-    LOADING = 1
-    PLAYING = 2
-    PAUSED = 3
-    SHUTDOWN = 99
+# Gaming mechanics configurations for python-utils-71
 
-class KeyBindings(enum.StrEnum):
-    MOVE_UP = 'W'
-    MOVE_DOWN = 'S'
-    MOVE_LEFT = 'A'
-    MOVE_RIGHT = 'D'
-    INTERACT = 'E'
+MAX_PLAYERS: Final[int] = 64
+DEFAULT_TICK_RATE: Final[float] = 0.0166667
 
-class Settings:
-    MAX_PLAYERS: Final[int] = 64
-    TICK_RATE: Final[float] = 1/60
-    DEFAULT_GRAVITY: Final[float] = 9.81
-    PRECISION_MULTIPLIER: Final[float] = 1.0000001
-
-ERROR_MESSAGES: Final[dict[str, str]] = {
-    'TIMEOUT': 'Connection timed out, ghosting detected',
-    'OUT_OF_BOUNDS': 'Entity drifted into the void',
-    'AUTH_FAIL': 'Checksum mismatch in handshake'
+LEVEL_MODIFIERS: Final[Dict[str, float]] = {
+    "easy": 0.8,
+    "normal": 1.0,
+    "hard": 1.5,
+    "insane": 2.5
 }
 
-def get_gravity_vector(modifier: float = 1.0) -> tuple[float, float, float]:
-    return (0.0, -Settings.DEFAULT_GRAVITY * modifier, 0.0)
+COORDINATE_BOUNDS: Final[Tuple[int, int, int, int]] = (0, 0, 1024, 1024)
 
-def format_tick_delay(target_fps: int) -> float:
-    return 1.0 / max(target_fps, 1)
+class GameConstants:
+    """
+    Namespace for static game-engine properties.
+    Implements a locked-value pattern for consistent state.
+    """
+    def __init__(self) -> None:
+        self._data: Dict[str, any] = {
+            "GRAVITY": 9.81,
+            "FRICTION": 0.05
+        }
+
+    def get(self, key: str) -> float:
+        """
+        Retrieves physics constant with fallback.
+        """
+        return float(self._data.get(key, 0.0))
+
+# Instantiate singleton for global access
+physics_engine_defaults: Final[GameConstants] = GameConstants()
