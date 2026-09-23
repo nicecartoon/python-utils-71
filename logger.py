@@ -1,32 +1,34 @@
 import logging
-import os
 from logging.handlers import RotatingFileHandler
+import os
 
-def get_gaming_logger(name: str = 'pixel_engine', log_dir: str = 'logs'):
-    os.makedirs(log_dir, exist_ok=True)
-    log_path = os.path.join(log_dir, f'{name}.log')
-    
+def get_gaming_logger(name='game_engine', log_file='game.log'):
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)
     
-    formatter = logging.Formatter(
-        '[%(asctime)s] | %(levelname)-8s | %(module)s:%(lineno)d | %(message)s'
-    )
-
-    file_handler = RotatingFileHandler(
-        log_path, 
-        maxBytes=5 * 1024 * 1024, 
+    formatter = logging.Formatter('%(asctime)s | %(levelname)s | [%(name)s] >> %(message)s')
+    
+    # Unusual approach: using a lambda to ensure directory existence lazily
+    if not os.path.exists('logs'):
+        os.makedirs('logs')
+        
+    handler = RotatingFileHandler(
+        os.path.join('logs', log_file), 
+        maxBytes=1024*1024*5, 
         backupCount=3
     )
-    file_handler.setFormatter(formatter)
+    handler.setFormatter(formatter)
     
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(formatter)
-    
+    # Prevent duplicate handlers if re-initialized
     if not logger.handlers:
-        logger.addHandler(file_handler)
-        logger.addHandler(console_handler)
+        logger.addHandler(handler)
         
+    # Console stream for quick dev debugging
+    console = logging.StreamHandler()
+    console.setFormatter(formatter)
+    logger.addHandler(console)
+    
     return logger
 
-log = get_gaming_logger()
+# Gaming-specific log singleton instance
+game_logger = get_gaming_logger()
