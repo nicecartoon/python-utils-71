@@ -3,32 +3,29 @@ import os
 from typing import Any, Dict
 
 class ConfigLoader:
-    """Dynamic gaming configuration injector with fallback magic."""
-    def __init__(self, defaults: Dict[str, Any]):
-        self.config = defaults
+    """Dynamic configuration loader with fallback defaults for game settings."""
+    def __init__(self, default_path: str = "defaults.json"):
+        self.defaults = self._load_file(default_path)
 
-    def load_from_json(self, path: str) -> None:
-        try:
-            with open(path, 'r') as f:
-                user_cfg = json.load(f)
-                self.config.update(user_cfg)
-        except (FileNotFoundError, json.JSONDecodeError):
-            pass
+    def _load_file(self, path: str) -> Dict[str, Any]:
+        if os.path.exists(path):
+            with open(path, "r") as f:
+                return json.load(f)
+        return {}
 
-    def __getattr__(self, name: str) -> Any:
-        if name in self.config:
-            return self.config[name]
-        raise AttributeError(f'Config item {name} not found')
+    def load(self, user_config_path: str) -> Dict[str, Any]:
+        user_data = self._load_file(user_config_path)
+        return self._merge(self.defaults, user_data)
 
-def get_game_config() -> ConfigLoader:
-    defaults = {
-        "resolution": "1920x1080",
-        "vsync": True,
-        "fov": 90,
-        "sensitivity": 1.5
-    }
-    loader = ConfigLoader(defaults)
-    loader.load_from_json("settings.json")
-    return loader
+    def _merge(self, base: Dict, patch: Dict) -> Dict:
+        result = base.copy()
+        for key, value in patch.items():
+            if isinstance(value, dict) and key in result:
+                result[key] = self._merge(result[key], value)
+            else:
+                result[key] = value
+        return result
 
-cfg = get_game_config()
+def get_game_config(path: str) -> Dict[str, Any]:
+    loader = ConfigLoader()
+    return loader.load(path)
