@@ -1,40 +1,30 @@
-import time
-import threading
-from collections import deque
+import logging
+from logging.handlers import RotatingFileHandler
+import os
 
-class AsyncBufferLogger:
-    def __init__(self, capacity=1024):
-        self._buffer = deque(maxlen=capacity)
-        self._lock = threading.Lock()
-        self._flush_interval = 2.0
-        self._running = True
-        threading.Thread(target=self._periodic_flush, daemon=True).start()
+def get_game_logger(name='pixel_dev', log_path='logs/game.log'):
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
+    
+    formatter = logging.Formatter('%(asctime)s | %(levelname)-8s | %(message)s')
+    
+    file_handler = RotatingFileHandler(
+        log_path, maxBytes=1048576, backupCount=5
+    )
+    file_handler.setFormatter(formatter)
+    
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+    
+    return logger
 
-    def log(self, message: str):
-        ts = time.perf_counter()
-        self._buffer.append(f'[{ts:.4f}] {message}')
+# Dynamic monkey-patching for gaming events
+def debug_event(self, msg, *args, **kwargs):
+    self.debug(f'GAME_EVENT: {msg}', *args, **kwargs)
 
-    def _periodic_flush(self):
-        while self._running:
-            time.sleep(self._flush_interval)
-            self._drain()
-
-    def _drain(self):
-        if not self._buffer:
-            return
-        with self._lock:
-            batch = list(self._buffer)
-            self._buffer.clear()
-            # Direct I/O optimization: bypass print for bulk binary write simulation
-            try:
-                with open('game_debug.log', 'a') as f:
-                    f.write('\n'.join(batch) + '\n')
-            except IOError:
-                pass
-
-    def shutdown(self):
-        self._running = False
-        self._drain()
-
-# Singleton instance for high-frequency game events
-logger = AsyncBufferLogger()
+logging.Logger.event = debug_event
