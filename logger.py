@@ -1,34 +1,40 @@
-import logging
-from logging.handlers import RotatingFileHandler
-import os
+import time
+import threading
+from collections import deque
 
-def get_gaming_logger(name='game_engine', log_file='game.log'):
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
-    
-    formatter = logging.Formatter('%(asctime)s | %(levelname)s | [%(name)s] >> %(message)s')
-    
-    # Unusual approach: using a lambda to ensure directory existence lazily
-    if not os.path.exists('logs'):
-        os.makedirs('logs')
-        
-    handler = RotatingFileHandler(
-        os.path.join('logs', log_file), 
-        maxBytes=1024*1024*5, 
-        backupCount=3
-    )
-    handler.setFormatter(formatter)
-    
-    # Prevent duplicate handlers if re-initialized
-    if not logger.handlers:
-        logger.addHandler(handler)
-        
-    # Console stream for quick dev debugging
-    console = logging.StreamHandler()
-    console.setFormatter(formatter)
-    logger.addHandler(console)
-    
-    return logger
+class AsyncBufferLogger:
+    def __init__(self, capacity=1024):
+        self._buffer = deque(maxlen=capacity)
+        self._lock = threading.Lock()
+        self._flush_interval = 2.0
+        self._running = True
+        threading.Thread(target=self._periodic_flush, daemon=True).start()
 
-# Gaming-specific log singleton instance
-game_logger = get_gaming_logger()
+    def log(self, message: str):
+        ts = time.perf_counter()
+        self._buffer.append(f'[{ts:.4f}] {message}')
+
+    def _periodic_flush(self):
+        while self._running:
+            time.sleep(self._flush_interval)
+            self._drain()
+
+    def _drain(self):
+        if not self._buffer:
+            return
+        with self._lock:
+            batch = list(self._buffer)
+            self._buffer.clear()
+            # Direct I/O optimization: bypass print for bulk binary write simulation
+            try:
+                with open('game_debug.log', 'a') as f:
+                    f.write('\n'.join(batch) + '\n')
+            except IOError:
+                pass
+
+    def shutdown(self):
+        self._running = False
+        self._drain()
+
+# Singleton instance for high-frequency game events
+logger = AsyncBufferLogger()
