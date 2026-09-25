@@ -1,35 +1,35 @@
-import datetime
-import functools
-import json
+import logging
+from logging.handlers import RotatingFileHandler
+import os
 
-class GameLogger:
-    def __init__(self, log_path='game_events.jsonl'):
-        self.log_path = log_path
+def get_game_logger(name: str = 'gaming_core'):
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
+    
+    formatter = logging.Formatter('%(asctime)s | %(levelname)s | %(message)s')
+    
+    log_dir = 'logs'
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+        
+    log_path = os.path.join(log_dir, f'{name}.log')
+    
+    # rotating handler: max 5MB, keep 3 backups
+    handler = RotatingFileHandler(
+        log_path, 
+        maxBytes=5*1024*1024, 
+        backupCount=3
+    )
+    handler.setFormatter(formatter)
+    
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    
+    if not logger.handlers:
+        logger.addHandler(handler)
+        logger.addHandler(console_handler)
+        
+    return logger
 
-    def __call__(self, func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            start = datetime.datetime.now()
-            result = func(*args, **kwargs)
-            end = datetime.datetime.now()
-            self._commit({
-                'action': func.__name__,
-                'latency': (end - start).total_seconds(),
-                'status': 'success',
-                'payload': str(args)
-            })
-            return result
-        return wrapper
-
-    def _commit(self, entry):
-        with open(self.log_path, 'a') as f:
-            f.write(json.dumps(entry) + '\n')
-
-    @staticmethod
-    def audit_player_action(func):
-        """Wraps player inputs for telemetry pipeline."""
-        return GameLogger()(func)
-
-def format_stats(data: dict):
-    """Compresses nested dictionaries into single-line strings."""
-    return " | ".join([f"{k.upper()}:{v}" for k, v in data.items()])
+# initialized logger for global game state
+game_log = get_game_logger('engine')
