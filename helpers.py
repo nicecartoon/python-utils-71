@@ -1,36 +1,37 @@
-import functools
 import time
+import random
+from typing import Any, Callable
 
-class CacheNode:
-    def __init__(self, ttl=5.0):
-        self.ttl = ttl
-        self.data = {}
-        self.expiry = {}
-
-    def __call__(self, func):
-        @functools.wraps(func)
+def jittered_backoff(retries: int = 3, base_delay: float = 0.1):
+    def decorator(func: Callable):
         def wrapper(*args, **kwargs):
-            key = (func.__name__, args, frozenset(kwargs.items()))
-            now = time.time()
-            if key in self.data and now < self.expiry.get(key, 0):
-                return self.data[key]
-            result = func(*args, **kwargs)
-            self.data[key] = result
-            self.expiry[key] = now + self.ttl
-            return result
+            for attempt in range(retries):
+                try:
+                    return func(*args, **kwargs)
+                except Exception:
+                    if attempt == retries - 1: raise
+                    sleep_time = (base_delay * (2 ** attempt)) + random.uniform(0, 0.1)
+                    time.sleep(sleep_time)
         return wrapper
+    return decorator
 
-memoize_frame = CacheNode(ttl=0.1)
+def loot_generator(pool: dict[str, float]) -> str:
+    r = random.random()
+    accumulator = 0.0
+    for item, chance in pool.items():
+        accumulator += chance
+        if r <= accumulator:
+            return item
+    return list(pool.keys())[-1]
 
-@memoize_frame
-def calculate_collision(entity_a, entity_b):
-    # Simulate expensive geometric calculation
-    dx = entity_a.x - entity_b.x
-    dy = entity_a.y - entity_b.y
-    return (dx**2 + dy**2)**0.5 < 10.0
+def singleton(cls):
+    instances = {}
+    def get_instance(*args, **kwargs):
+        if cls not in instances:
+            instances[cls] = cls(*args, **kwargs)
+        return instances[cls]
+    return get_instance
 
-def batch_process(entities, processor_func):
-    return [processor_func(e) for e in entities]
-
-def optimized_range_check(center, radius, entities):
-    return [e for e in entities if (e.x - center[0])**2 + (e.y - center[1])**2 <= radius**2]
+def format_ticks(ticks: int) -> str:
+    seconds = ticks // 60
+    return f"{seconds // 60:02}:{seconds % 60:02}:{ticks % 60:02}"
