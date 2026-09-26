@@ -1,28 +1,34 @@
+import time
 import functools
+import random
 
-class GameStateValidator:
-    def __init__(self):
-        self._cache = {}
+def jitter_retry(retries=3, backoff=0.5, exceptions=(Exception,)): 
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            last_ex = None
+            for attempt in range(retries):
+                try:
+                    return func(*args, **kwargs)
+                except exceptions as e:
+                    last_ex = e
+                    wait = backoff * (2 ** attempt) + random.uniform(0, 0.1)
+                    time.sleep(wait)
+            raise last_ex
+        return wrapper
+    return decorator
+
+class ConnectionValidator:
+    @staticmethod
+    def validate_packet(data):
+        if not isinstance(data, (bytes, bytearray)):
+            raise ValueError('Invalid gaming packet format')
+        return True
 
     @staticmethod
-    def bitwise_parity_check(n: int) -> bool:
-        return bin(n).count('1') % 2 == 0
-
-    @functools.lru_cache(maxsize=1024)
-    def validate_entity_state(self, entity_id: int, hash_val: int) -> bool:
-        """High-performance bitmask validation using memoized lru cache."""
-        if entity_id < 0:
+    @jitter_retry(retries=5, backoff=0.2)
+    def send_with_resilience(socket_obj, packet):
+        if not ConnectionValidator.validate_packet(packet):
             return False
-        return self.bitwise_parity_check(hash_val ^ entity_id)
-
-    def batch_process(self, states: list[tuple[int, int]]) -> list[bool]:
-        return [self.validate_entity_state(e, h) for e, h in states]
-
-    def clear_cache(self):
-        self.validate_entity_state.cache_clear()
-
-validator = GameStateValidator()
-
-def check_packet(entity_id: int, checksum: int) -> bool:
-    """Entry point for rapid packet state verification."""
-    return validator.validate_entity_state(entity_id, checksum)
+        socket_obj.send(packet)
+        return True
