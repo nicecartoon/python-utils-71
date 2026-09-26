@@ -1,35 +1,46 @@
-import zlib
-import base64
-import json
-from typing import Any, Dict
+import array
+from typing import List, Tuple
 
-class GameStatePacker:
-    def __init__(self, compression_level: int = 9):
-        self.level = compression_level
+class BitwiseSpatialGrid:
+    """High-performance 2D spatial partitioning grid using bit-packed coordinates."""
+    
+    def __init__(self, cell_size: int = 64):
+        self.cell_size = cell_size
+        self._shift = cell_size.bit_length() - 1
+        self._buckets = {}
+        self._dirty_cells = set()
 
-    def serialize(self, data: Dict[str, Any]) -> str:
-        raw = json.dumps(data, separators=(',', ':')).encode('utf-8')
-        compressed = zlib.compress(raw, level=self.level)
-        return base64.b85encode(compressed).decode('ascii')
+    def _pack_coords(self, x: float, y: float) -> int:
+        cx = int(x) >> self._shift
+        cy = int(y) >> self._shift
+        return (cx << 16) | (cy & 0xFFFF)
 
-    def deserialize(self, packed_data: str) -> Dict[str, Any]:
-        raw = base64.b85encode(packed_data.encode('ascii'))
-        decompressed = zlib.decompress(base64.b85decode(packed_data))
-        return json.loads(decompressed.decode('utf-8'))
+    def insert(self, entity_id: int, x: float, y: float) -> int:
+        cell_key = self._pack_coords(x, y)
+        bucket = self._buckets.setdefault(cell_key, array.array('i'))
+        bucket.append(entity_id)
+        self._dirty_cells.add(cell_key)
+        return cell_key
 
-def quick_save(data: Dict[str, Any]) -> str:
-    packer = GameStatePacker()
-    return packer.serialize(data)
+    def bulk_insert(self, entities: List[Tuple[int, float, float]]) -> None:
+        for eid, x, y in entities:
+            ck = self._pack_coords(x, y)
+            bucket = self._buckets.setdefault(ck, array.array('i'))
+            bucket.append(eid)
 
-def quick_load(blob: str) -> Dict[str, Any]:
-    packer = GameStatePacker()
-    try:
-        return packer.deserialize(blob)
-    except Exception as e:
-        return {'error': 'corrupt_save_data', 'reason': str(e)}
+    def query_radius(self, x: float, y: float, radius: float) -> List[int]:
+        min_x, max_x = int(x - radius) >> self._shift, int(x + radius) >> self._shift
+        min_y, max_y = int(y - radius) >> self._shift, int(y + radius) >> self._shift
+        
+        results = array.array('i')
+        for cx in range(min_x, max_x + 1):
+            for cy in range(min_y, max_y + 1):
+                key = (cx << 16) | (cy & 0xFFFF)
+                bucket = self._buckets.get(key)
+                if bucket:
+                    results.extend(bucket)
+        return list(results)
 
-if __name__ == '__main__':
-    mock_data = {'level': 42, 'inventory': ['sword', 'shield', 'potion'], 'pos': (120, 45)}
-    blob = quick_save(mock_data)
-    print(f'Packed state size: {len(blob)} chars')
-    print(f'Recovered: {quick_load(blob)}')
+    def clear(self) -> None:
+        self._buckets.clear()
+        self._dirty_cells.clear()
