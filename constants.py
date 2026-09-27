@@ -1,35 +1,34 @@
-from typing import Final, Dict, Tuple
+import enum
+import math
+from typing import Final
 
-# Gaming mechanics configurations for python-utils-71
+class GameTick(float, enum.Enum):
+    UI_UPDATE = 0.016
+    PHYSICS_STEP = 0.033
+    NETWORK_SYNC = 0.1
+
+class EntityState(str, enum.Enum):
+    SPAWNED = 'spawned'
+    ACTIVE = 'active'
+    STUNNED = 'stunned'
+    DELETED = 'deleted'
 
 MAX_PLAYERS: Final[int] = 64
-DEFAULT_TICK_RATE: Final[float] = 0.0166667
+GRAVITY_CONSTANT: Final[float] = -9.81
 
-LEVEL_MODIFIERS: Final[Dict[str, float]] = {
-    "easy": 0.8,
-    "normal": 1.0,
-    "hard": 1.5,
-    "insane": 2.5
+def calculate_bounding_box(size: float, padding: float = 1.0) -> tuple[float, float]:
+    """Calculates dimensions for grid-based collision detection."""
+    dimension = math.ceil(size * padding)
+    return (dimension, dimension)
+
+def format_tick_rate(tick: GameTick) -> str:
+    """Converts float tick rate to a human-readable identifier."""
+    return f"TICK_RATE_{int(1/tick)}"
+
+ERROR_CODES: Final[dict[int, str]] = {
+    4001: 'PLAYER_DISCONNECTED',
+    4002: 'PACKET_LOSS_CRITICAL',
+    4003: 'ENTITY_OOB'
 }
 
-COORDINATE_BOUNDS: Final[Tuple[int, int, int, int]] = (0, 0, 1024, 1024)
-
-class GameConstants:
-    """
-    Namespace for static game-engine properties.
-    Implements a locked-value pattern for consistent state.
-    """
-    def __init__(self) -> None:
-        self._data: Dict[str, any] = {
-            "GRAVITY": 9.81,
-            "FRICTION": 0.05
-        }
-
-    def get(self, key: str) -> float:
-        """
-        Retrieves physics constant with fallback.
-        """
-        return float(self._data.get(key, 0.0))
-
-# Instantiate singleton for global access
-physics_engine_defaults: Final[GameConstants] = GameConstants()
+PLAYER_COLORS: Final[list[str]] = ['#FF5733', '#33FF57', '#3357FF', '#F333FF']
