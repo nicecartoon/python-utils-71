@@ -1,28 +1,31 @@
+import functools
 import time
 import random
-from typing import Any, Callable
+from typing import Callable, Any
 
-def jittered_backoff(retries: int = 3, base_delay: float = 0.1):
+def jitter_retry(retries: int = 3, base_delay: float = 0.5):
     def decorator(func: Callable):
+        @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            for attempt in range(retries):
+            last_ex = None
+            for i in range(retries):
                 try:
                     return func(*args, **kwargs)
-                except Exception:
-                    if attempt == retries - 1: raise
-                    sleep_time = (base_delay * (2 ** attempt)) + random.uniform(0, 0.1)
-                    time.sleep(sleep_time)
+                except Exception as e:
+                    last_ex = e
+                    time.sleep(base_delay * (2 ** i) + random.uniform(0, 0.1))
+            raise last_ex
         return wrapper
     return decorator
 
-def loot_generator(pool: dict[str, float]) -> str:
+def loot_table_roll(items: dict[str, float]) -> str:
     r = random.random()
-    accumulator = 0.0
-    for item, chance in pool.items():
-        accumulator += chance
-        if r <= accumulator:
+    cumulative = 0.0
+    for item, weight in items.items():
+        cumulative += weight
+        if r <= cumulative:
             return item
-    return list(pool.keys())[-1]
+    return list(items.keys())[-1]
 
 def singleton(cls):
     instances = {}
@@ -32,6 +35,12 @@ def singleton(cls):
         return instances[cls]
     return get_instance
 
-def format_ticks(ticks: int) -> str:
-    seconds = ticks // 60
-    return f"{seconds // 60:02}:{seconds % 60:02}:{ticks % 60:02}"
+class GameTimer:
+    def __init__(self):
+        self.start_time = time.perf_counter()
+
+    def tick(self) -> float:
+        now = time.perf_counter()
+        delta = now - self.start_time
+        self.start_time = now
+        return delta
