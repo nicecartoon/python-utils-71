@@ -1,32 +1,45 @@
-class InputValidationError(Exception):
-    """Base exception for gaming input telemetry anomalies."""
+import random
+import time
+from typing import Callable, Any, Tuple, Type
+
+class NetworkGlitch(Exception):
+    """Base exception for transient gaming network anomalies."""
     pass
 
-def validate_game_state(payload: dict):
-    required_keys = {'player_id', 'action_code', 'timestamp'}
-    if not all(key in payload for key in required_keys):
-        raise InputValidationError(f"Missing critical telemetry fields: {required_keys - payload.keys()}")
-    if not isinstance(payload.get('action_code'), int):
-        raise InputValidationError("Invalid action_code type, integer expected.")
+class LagSpikeError(NetworkGlitch):
+    """Temporary latency spike, highly recoverable."""
+    pass
 
-def sanitize_input_loop(data_generator):
-    """
-    A generator-based sanitizer for the processing loop.
-    Wraps the stream to drop malformed gaming inputs.
-    """
-    for raw_packet in data_generator:
-        try:
-            validate_game_state(raw_packet)
-            yield raw_packet
-        except InputValidationError as e:
-            print(f"Telemetry anomaly detected: {e}. Dropping packet.")
-            continue
+class PacketLossError(NetworkGlitch):
+    """Dropped frames or packets, requires aggressive retry."""
+    pass
 
-if __name__ == "__main__":
-    # Demo of the creative validator hook
-    samples = [
-        {'player_id': 101, 'action_code': 5, 'timestamp': 1700000000},
-        {'player_id': 102, 'timestamp': 1700000001}
-    ]
-    for valid_data in sanitize_input_loop(samples):
-        print(f"Processing valid move for {valid_data['player_id']}")
+class MatchmakingTimeoutError(NetworkGlitch):
+    """Connection timeout to matchmaker, retry recommended."""
+    pass
+
+def self_healing(
+    max_retries: int = 5,
+    base_delay: float = 0.1,
+    jitter: bool = True,
+    exceptions: Tuple[Type[Exception], ...] = (NetworkGlitch,)
+):
+    """
+    Fibonacci-based backoff decorator specifically tuned for gaming micro-outages.
+    """
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            a, b = 1, 1
+            for attempt in range(max_retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except exceptions as e:
+                    if attempt == max_retries:
+                        raise e
+                    delay = a * base_delay
+                    if jitter:
+                        delay += random.uniform(0.01, 0.05)
+                    time.sleep(delay)
+                    a, b = b, a + b
+        return wrapper
+    return decorator
