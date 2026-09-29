@@ -1,37 +1,41 @@
-import logging
-from logging.handlers import RotatingFileHandler
-import os
+import sys
+from datetime import datetime
 
-def get_game_logger(name: str = "game_engine") -> logging.Logger:
-    """
-    Initializes a logger that treats log files like circular buffers,
-    essential for capturing performance metrics without disk exhaustion.
-    """
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
+class RetroGameLogger:
+    LEVELS = {
+        "INFO": ("\u001b[92m[▮▮▮▮▮]\u001b[0m", "SYS"),
+        "WARNING": ("\u001b[93m[▮▮▮▯▯]\u001b[0m", "WARN"),
+        "ERROR": ("\u001b[91m[▮\u001b[90m▮▮▮▮\u001b[91m]\u001b[0m", "CRIT"),
+        "CRITICAL": ("\u001b[95m[💀💀💀]\u001b[0m", "DEATH")
+    }
 
-    if not os.path.exists("logs"):
-        os.makedirs("logs")
+    def __init__(self, game_title: str = "RETRO-OS"):
+        self.game_title = game_title.upper()
 
-    log_path = os.path.join("logs", f"{name}.log")
+    def _format(self, level: str, message: str) -> str:
+        bar, prefix = self.LEVELS.get(level.upper(), ("\u001b[97m[?????]\u001b[0m", "UNKN"))
+        timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+        return f"[{timestamp}] <{self.game_title}> {bar} | {prefix} :: {message}"
 
-    # 5MB per file, keeping 3 backups for historical context
-    handler = RotatingFileHandler(
-        log_path, 
-        maxBytes=5 * 1024 * 1024, 
-        backupCount=3
-    )
-    
-    formatter = logging.Formatter(
-        '[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s',
-        datefmt='%H:%M:%S'
-    )
-    handler.setFormatter(formatter)
-    
-    if not logger.handlers:
-        logger.addHandler(handler)
-        
-    return logger
+    def log(self, level: str, message: str):
+        formatted_message = self._format(level, message)
+        sys.stdout.write(formatted_message + "\n")
+        sys.stdout.flush()
 
-# Quick access point for gaming submodules
-engine_logger = get_game_logger("core_engine")
+    def info(self, msg: str): 
+        self.log("INFO", msg)
+
+    def warning(self, msg: str): 
+        self.log("WARNING", msg)
+
+    def error(self, msg: str): 
+        self.log("ERROR", msg)
+
+    def critical(self, msg: str): 
+        self.log("CRITICAL", msg)
+
+    def achievement(self, title: str, xp: int = 100):
+        border = "★" * (len(title) + 26)
+        msg = f"\n{border}\n★ ACHIEVEMENT UNLOCKED: {title} (+{xp} XP) ★\n{border}\n"
+        sys.stdout.write(f"\u001b[96m{msg}\u001b[0m")
+        sys.stdout.flush()
