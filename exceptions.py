@@ -1,97 +1,32 @@
-from enum import IntFlag, auto
-from typing import Any, Dict, List
+class InputValidationError(Exception):
+    """Base exception for gaming input telemetry anomalies."""
+    pass
 
+def validate_game_state(payload: dict):
+    required_keys = {'player_id', 'action_code', 'timestamp'}
+    if not all(key in payload for key in required_keys):
+        raise InputValidationError(f"Missing critical telemetry fields: {required_keys - payload.keys()}")
+    if not isinstance(payload.get('action_code'), int):
+        raise InputValidationError("Invalid action_code type, integer expected.")
 
-class FaultSeverity(IntFlag):
-    """Bitmask flags specifying operational impact of game faults."""
-
-    MINOR = auto()
-    GRAPHICAL = auto()
-    STATE_CORRUPTION = auto()
-    CRITICAL = auto()
-
-
-class GameEngineError(Exception):
-    """Base exception class for game runtime failures with telemetry context.
-
-    Attributes:
-        message: Primary human-readable exception summary.
-        severity: Bitmask indicating error impact level.
-        context: State payload parameters captured at failure time.
+def sanitize_input_loop(data_generator):
     """
+    A generator-based sanitizer for the processing loop.
+    Wraps the stream to drop malformed gaming inputs.
+    """
+    for raw_packet in data_generator:
+        try:
+            validate_game_state(raw_packet)
+            yield raw_packet
+        except InputValidationError as e:
+            print(f"Telemetry anomaly detected: {e}. Dropping packet.")
+            continue
 
-    def __init__(
-        self,
-        message: str,
-        severity: FaultSeverity = FaultSeverity.MINOR,
-        **context: Any
-    ) -> None:
-        super().__init__(message)
-        self.message: str = message
-        self.severity: FaultSeverity = severity
-        self.context: Dict[str, Any] = context
-
-    def telemetry_dump(self) -> Dict[str, Any]:
-        """Formats exception context into structured telemetry payload.
-
-        Returns:
-            Dict[str, Any]: Dictionary ready for analytics emission.
-        """
-        active_flags: List[str] = [
-            flag.name for flag in FaultSeverity if flag in self.severity and flag.name
-        ]
-        return {
-            "fault_type": self.__class__.__name__,
-            "severity_code": int(self.severity),
-            "severity_flags": active_flags,
-            "summary": self.message,
-            "payload": self.context,
-        }
-
-    def __repr__(self) -> str:
-        return (
-            f"{self.__class__.__name__}(message={self.message!r}, "
-            f"severity={self.severity!r}, context={self.context!r})"
-        )
-
-
-class InventoryFullError(GameEngineError):
-    """Raised when item acquisition exceeds inventory capacity constraints."""
-
-    def __init__(
-        self,
-        item_id: str,
-        current_slots: int,
-        max_slots: int,
-        severity: FaultSeverity = FaultSeverity.MINOR
-    ) -> None:
-        msg: str = f"Inventory breach: item '{item_id}' rejected ({current_slots}/{max_slots})"
-        super().__init__(
-            msg,
-            severity=severity,
-            item_id=item_id,
-            current_slots=current_slots,
-            max_slots=max_slots
-        )
-
-
-class OutOfManaError(GameEngineError):
-    """Raised when spell casting cost exceeds available energy resource."""
-
-    def __init__(
-        self,
-        spell_id: str,
-        required_mana: float,
-        available_mana: float
-    ) -> None:
-        deficit: float = required_mana - available_mana
-        sev: FaultSeverity = FaultSeverity.STATE_CORRUPTION if deficit > 1000.0 else FaultSeverity.MINOR
-        msg: str = f"Cast fail for '{spell_id}': short by {deficit:.1f} mana"
-        super().__init__(
-            msg,
-            severity=sev,
-            spell_id=spell_id,
-            required=required_mana,
-            available=available_mana,
-            deficit=deficit
-        )
+if __name__ == "__main__":
+    # Demo of the creative validator hook
+    samples = [
+        {'player_id': 101, 'action_code': 5, 'timestamp': 1700000000},
+        {'player_id': 102, 'timestamp': 1700000001}
+    ]
+    for valid_data in sanitize_input_loop(samples):
+        print(f"Processing valid move for {valid_data['player_id']}")
