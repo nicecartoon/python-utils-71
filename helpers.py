@@ -1,46 +1,46 @@
-import functools
-import time
-import random
-from typing import Callable, Any
+import logging
+import os
+from logging.handlers import RotatingFileHandler
 
-def jitter_retry(retries: int = 3, base_delay: float = 0.5):
-    def decorator(func: Callable):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            last_ex = None
-            for i in range(retries):
-                try:
-                    return func(*args, **kwargs)
-                except Exception as e:
-                    last_ex = e
-                    time.sleep(base_delay * (2 ** i) + random.uniform(0, 0.1))
-            raise last_ex
-        return wrapper
-    return decorator
+def setup_game_logger(name: str = 'game_engine', log_dir: str = 'logs') -> logging.Logger:
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
 
-def loot_table_roll(items: dict[str, float]) -> str:
-    r = random.random()
-    cumulative = 0.0
-    for item, weight in items.items():
-        cumulative += weight
-        if r <= cumulative:
-            return item
-    return list(items.keys())[-1]
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
 
-def singleton(cls):
-    instances = {}
-    def get_instance(*args, **kwargs):
-        if cls not in instances:
-            instances[cls] = cls(*args, **kwargs)
-        return instances[cls]
-    return get_instance
+    formatter = logging.Formatter(
+        '[%(asctime)s] [%(levelname)s] [%(name)s]: %(message)s',
+        datefmt='%H:%M:%S'
+    )
 
-class GameTimer:
-    def __init__(self):
-        self.start_time = time.perf_counter()
+    log_path = os.path.join(log_dir, f'{name}.log')
+    handler = RotatingFileHandler(
+        log_path, 
+        maxBytes=1024 * 1024 * 5, 
+        backupCount=3
+    )
+    handler.setFormatter(formatter)
+    
+    console = logging.StreamHandler()
+    console.setFormatter(formatter)
+    
+    if not logger.handlers:
+        logger.addHandler(handler)
+        logger.addHandler(console)
 
-    def tick(self) -> float:
-        now = time.perf_counter()
-        delta = now - self.start_time
-        self.start_time = now
-        return delta
+    return logger
+
+# Dynamic injection of game status reporting
+class GameLoggerContext:
+    def __init__(self, logger):
+        self.logger = logger
+
+    def __enter__(self):
+        self.logger.info('--- Session Started ---')
+        return self.logger
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type:
+            self.logger.critical(f'Crashed: {exc_val}')
+        self.logger.info('--- Session Terminated ---')
