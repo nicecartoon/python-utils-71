@@ -1,29 +1,44 @@
-import time
 import functools
+import time
 import random
 
-def retry_operation(max_attempts=3, delay=1.0, backoff=2.0):
+def gaming_throttle(ms=100):
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            attempts = 0
-            current_delay = delay
-            while attempts < max_attempts:
-                try:
-                    return func(*args, **kwargs)
-                except Exception as e:
-                    attempts += 1
-                    if attempts == max_attempts:
-                        raise e
-                    time.sleep(current_delay + random.uniform(0, 0.1))
-                    current_delay *= backoff
+            time.sleep(ms / 1000)
+            return func(*args, **kwargs)
         return wrapper
     return decorator
 
-class NetworkHandler:
-    @retry_operation(max_attempts=4, delay=0.5)
-    def fetch_game_data(self, endpoint):
-        # Simulate unstable gaming server latency
-        if random.random() < 0.7:
-            raise ConnectionError('Server timeout')
-        return {'status': 'success', 'data': 'payload_packet'}
+class EntityPool:
+    def __init__(self):
+        self._cache = {}
+
+    def fetch(self, entity_id):
+        return self._cache.get(entity_id)
+
+    def register(self, entity_id, data):
+        self._cache[entity_id] = {'data': data, 'ts': time.time()}
+
+    def prune(self, max_age=60):
+        now = time.time()
+        self._cache = {k: v for k, v in self._cache.items() if now - v['ts'] < max_age}
+
+def generate_loot_seed(rarity_factor):
+    base = random.randint(100, 999)
+    return hex(int(base * rarity_factor))
+
+def batch_process_entities(entities, action_func):
+    return [action_func(e) for e in entities if e is not None]
+
+class StateManager:
+    def __init__(self):
+        self.states = set()
+    
+    def toggle(self, state):
+        if state in self.states:
+            self.states.remove(state)
+        else:
+            self.states.add(state)
+        return state in self.states
