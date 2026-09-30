@@ -1,46 +1,31 @@
-import logging
-import os
-from logging.handlers import RotatingFileHandler
+from typing import List, Union, Callable, Any
 
-def setup_game_logger(name: str = 'game_engine', log_dir: str = 'logs') -> logging.Logger:
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
+GameScore = Union[int, float]
 
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
+def calculate_experience_multiplier(level: int, base: float = 1.0) -> float:
+    """Calculates exponential experience gain based on player level."""
+    return base * (1.1 ** (level - 1))
 
-    formatter = logging.Formatter(
-        '[%(asctime)s] [%(levelname)s] [%(name)s]: %(message)s',
-        datefmt='%H:%M:%S'
-    )
+def apply_buffs(stats: List[int], modifier: Callable[[int], int]) -> List[int]:
+    """Applies a functional transformation to a list of player stats."""
+    return [modifier(s) for s in stats]
 
-    log_path = os.path.join(log_dir, f'{name}.log')
-    handler = RotatingFileHandler(
-        log_path, 
-        maxBytes=1024 * 1024 * 5, 
-        backupCount=3
-    )
-    handler.setFormatter(formatter)
-    
-    console = logging.StreamHandler()
-    console.setFormatter(formatter)
-    
-    if not logger.handlers:
-        logger.addHandler(handler)
-        logger.addHandler(console)
+class EntityFactory:
+    """Generator for spawning game entities with unique identifiers."""
+    def __init__(self, prefix: str) -> None:
+        self.prefix = prefix
+        self._counter = 0
 
-    return logger
+    def spawn(self, entity_type: str) -> str:
+        """Creates a unique entity tag string."""
+        self._counter += 1
+        return f"{self.prefix}_{entity_type}_{self._counter:03d}"
 
-# Dynamic injection of game status reporting
-class GameLoggerContext:
-    def __init__(self, logger):
-        self.logger = logger
+def normalize_coordinates(coords: tuple[float, float]) -> tuple[int, int]:
+    """Maps float game space coordinates to discrete integer grid slots."""
+    x, y = coords
+    return int(round(x)), int(round(y))
 
-    def __enter__(self):
-        self.logger.info('--- Session Started ---')
-        return self.logger
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if exc_type:
-            self.logger.critical(f'Crashed: {exc_val}')
-        self.logger.info('--- Session Terminated ---')
+def process_inventory(items: List[Any], filter_func: Callable[[Any], bool]) -> List[Any]:
+    """Filters inventory lists using a custom condition predicate."""
+    return [item for item in items if filter_func(item)]
