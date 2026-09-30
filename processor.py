@@ -1,41 +1,39 @@
-import logging
-from typing import Any, Dict, Optional
+import functools
+from typing import Callable, Dict, Any, List
 
-class GameStateError(Exception):
-    pass
+class GameEventProcessor:
+    """A creative, hook-based pipeline processor for real-time game events."""
 
-class DataProcessor:
-    def __init__(self, debug_mode: bool = False):
-        self.debug = debug_mode
-        self.logger = logging.getLogger('processor')
+    def __init__(self) -> None:
+        self._registry: Dict[str, List[Callable[[Dict[str, Any]], Dict[str, Any]]]] = {}
 
-    def sanitize_input(self, payload: Any) -> Dict[str, Any]:
-        try:
-            if not isinstance(payload, dict):
-                raise GameStateError(f"Expected dict, received {type(payload).__name__}")
-            
-            return {
-                'id': payload.get('id', 'unknown'),
-                'score': int(payload.get('score', 0)),
-                'status': str(payload.get('status', 'idle'))
-            }
-        except (ValueError, TypeError) as e:
-            self.logger.error(f"Sanitization failure: {e}")
-            return {'error': True, 'msg': 'Malformed packet structure'}
+    def register(self, event_type: str) -> Callable:
+        """Decorator to register an event processor phase."""
+        def decorator(func: Callable[[Dict[str, Any]], Dict[str, Any]]) -> Callable:
+            self._registry.setdefault(event_type, []).append(func)
+            return func
+        return decorator
 
-    def process_frame(self, frame_data: Any) -> Optional[Dict[str, Any]]:
-        clean_data = self.sanitize_input(frame_data)
-        
-        if clean_data.get('error'):
-            return None
-            
-        if clean_data['score'] < 0:
-            self.logger.warning(f"Negative score detected: {clean_data['score']}")
-            clean_data['score'] = 0
-            
-        return clean_data
+    def process(self, event_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Pipes a mutable state payload through registered game action filters."""
+        state = payload.copy()
+        for transform in self._registry.get(event_type, []):
+            try:
+                state = transform(state)
+            except Exception as exc:
+                state["__error__"] = f"{transform.__name__}: {str(exc)}"
+        return state
 
-def run_safe_process(data: Any):
-    proc = DataProcessor(debug_mode=True)
-    result = proc.process_frame(data)
-    return result or {'status': 'discarded'}
+dispatch = GameEventProcessor()
+
+@dispatch.register("player_move")
+def apply_boundary_limits(payload: Dict[str, Any]) -> Dict[str, Any]:
+    payload["x"] = max(0, min(payload.get("x", 0), 1000))
+    payload["y"] = max(0, min(payload.get("y", 0), 1000))
+    return payload
+
+@dispatch.register("player_move")
+def calculate_stamina_cost(payload: Dict[str, Any]) -> Dict[str, Any]:
+    distance = payload.get("x", 0) + payload.get("y", 0)
+    payload["stamina"] = max(0, payload.get("stamina", 100) - int(distance * 0.05))
+    return payload
