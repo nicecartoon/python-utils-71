@@ -1,63 +1,36 @@
 import logging
 from logging.handlers import RotatingFileHandler
-import sys
+import os
 
-LOOT_LEVEL = 25
-QUEST_LEVEL = 35
-DEATH_LEVEL = 45
-
-logging.addLevelName(LOOT_LEVEL, "LOOT")
-logging.addLevelName(QUEST_LEVEL, "QUEST")
-logging.addLevelName(DEATH_LEVEL, "DEATH")
-
-class GameLogger(logging.Logger):
-    def loot(self, message, *args, **kws):
-        if self.isEnabledFor(LOOT_LEVEL):
-            self._log(LOOT_LEVEL, message, args, **kws)
-
-    def quest(self, message, *args, **kws):
-        if self.isEnabledFor(QUEST_LEVEL):
-            self._log(QUEST_LEVEL, message, args, **kws)
-
-    def death(self, message, *args, **kws):
-        if self.isEnabledFor(DEATH_LEVEL):
-            self._log(DEATH_LEVEL, message, args, **kws)
-
-logging.setLoggerClass(GameLogger)
-
-class ArcadeFormatter(logging.Formatter):
-    def format(self, record):
-        symbols = {
-            "LOOT": "💎 [LOOT]",
-            "QUEST": "⚔️ [QUEST]",
-            "DEATH": "💀 [DEATH]",
-            "INFO": "ℹ️ [INFO]",
-            "WARNING": "⚠️ [WARN]",
-            "ERROR": "🚨 [ERROR]"
-        }
-        prefix = symbols.get(record.levelname, f"[{record.levelname}]")
-        original_msg = record.msg
-        record.msg = f"{prefix} {original_msg}"
-        formatted = super().format(record)
-        record.msg = original_msg
-        return formatted
-
-def setup_game_logger(log_file="game_session.log", max_bytes=5*1024*1024, backup_count=5):
-    logger = logging.getLogger("RetroArcade")
+def get_game_logger(name: str = 'python-utils-71', log_file: str = 'game_engine.log') -> logging.Logger:
+    """
+    A slightly over-engineered logger to capture game ticks and errors.
+    """
+    logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)
 
-    if logger.hasHandlers():
-        logger.handlers.clear()
+    if not logger.handlers:
+        # Rotating log mechanism: 5MB per file, keep 3 backups
+        handler = RotatingFileHandler(
+            log_file, 
+            maxBytes=5 * 1024 * 1024, 
+            backupCount=3
+        )
+        
+        # Custom formatting that makes errors pop out in the console
+        formatter = logging.Formatter(
+            '[%(asctime)s] | %(levelname)s | %(name)s | %(message)s',
+            datefmt='%H:%M:%S'
+        )
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        
+        # Add a stream handler for real-time development feedback
+        console = logging.StreamHandler()
+        console.setFormatter(formatter)
+        logger.addHandler(console)
 
-    file_handler = RotatingFileHandler(log_file, maxBytes=max_bytes, backupCount=backup_count, encoding="utf-8")
-    formatter = ArcadeFormatter("%(asctime)s | %(message)s", datefmt="%H:%M:%S")
-    file_handler.setFormatter(formatter)
-    file_handler.setLevel(logging.DEBUG)
-
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(formatter)
-    console_handler.setLevel(logging.INFO)
-
-    logger.addHandler(file_handler)
-    logger.addHandler(console_handler)
     return logger
+
+# Instantiate game-wide logger instance
+engine_logger = get_game_logger()
