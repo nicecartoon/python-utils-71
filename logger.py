@@ -1,41 +1,63 @@
+import logging
+from logging.handlers import RotatingFileHandler
 import sys
-from datetime import datetime
 
-class RetroGameLogger:
-    LEVELS = {
-        "INFO": ("\u001b[92m[▮▮▮▮▮]\u001b[0m", "SYS"),
-        "WARNING": ("\u001b[93m[▮▮▮▯▯]\u001b[0m", "WARN"),
-        "ERROR": ("\u001b[91m[▮\u001b[90m▮▮▮▮\u001b[91m]\u001b[0m", "CRIT"),
-        "CRITICAL": ("\u001b[95m[💀💀💀]\u001b[0m", "DEATH")
-    }
+LOOT_LEVEL = 25
+QUEST_LEVEL = 35
+DEATH_LEVEL = 45
 
-    def __init__(self, game_title: str = "RETRO-OS"):
-        self.game_title = game_title.upper()
+logging.addLevelName(LOOT_LEVEL, "LOOT")
+logging.addLevelName(QUEST_LEVEL, "QUEST")
+logging.addLevelName(DEATH_LEVEL, "DEATH")
 
-    def _format(self, level: str, message: str) -> str:
-        bar, prefix = self.LEVELS.get(level.upper(), ("\u001b[97m[?????]\u001b[0m", "UNKN"))
-        timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
-        return f"[{timestamp}] <{self.game_title}> {bar} | {prefix} :: {message}"
+class GameLogger(logging.Logger):
+    def loot(self, message, *args, **kws):
+        if self.isEnabledFor(LOOT_LEVEL):
+            self._log(LOOT_LEVEL, message, args, **kws)
 
-    def log(self, level: str, message: str):
-        formatted_message = self._format(level, message)
-        sys.stdout.write(formatted_message + "\n")
-        sys.stdout.flush()
+    def quest(self, message, *args, **kws):
+        if self.isEnabledFor(QUEST_LEVEL):
+            self._log(QUEST_LEVEL, message, args, **kws)
 
-    def info(self, msg: str): 
-        self.log("INFO", msg)
+    def death(self, message, *args, **kws):
+        if self.isEnabledFor(DEATH_LEVEL):
+            self._log(DEATH_LEVEL, message, args, **kws)
 
-    def warning(self, msg: str): 
-        self.log("WARNING", msg)
+logging.setLoggerClass(GameLogger)
 
-    def error(self, msg: str): 
-        self.log("ERROR", msg)
+class ArcadeFormatter(logging.Formatter):
+    def format(self, record):
+        symbols = {
+            "LOOT": "💎 [LOOT]",
+            "QUEST": "⚔️ [QUEST]",
+            "DEATH": "💀 [DEATH]",
+            "INFO": "ℹ️ [INFO]",
+            "WARNING": "⚠️ [WARN]",
+            "ERROR": "🚨 [ERROR]"
+        }
+        prefix = symbols.get(record.levelname, f"[{record.levelname}]")
+        original_msg = record.msg
+        record.msg = f"{prefix} {original_msg}"
+        formatted = super().format(record)
+        record.msg = original_msg
+        return formatted
 
-    def critical(self, msg: str): 
-        self.log("CRITICAL", msg)
+def setup_game_logger(log_file="game_session.log", max_bytes=5*1024*1024, backup_count=5):
+    logger = logging.getLogger("RetroArcade")
+    logger.setLevel(logging.DEBUG)
 
-    def achievement(self, title: str, xp: int = 100):
-        border = "★" * (len(title) + 26)
-        msg = f"\n{border}\n★ ACHIEVEMENT UNLOCKED: {title} (+{xp} XP) ★\n{border}\n"
-        sys.stdout.write(f"\u001b[96m{msg}\u001b[0m")
-        sys.stdout.flush()
+    if logger.hasHandlers():
+        logger.handlers.clear()
+
+    file_handler = RotatingFileHandler(log_file, maxBytes=max_bytes, backupCount=backup_count, encoding="utf-8")
+    formatter = ArcadeFormatter("%(asctime)s | %(message)s", datefmt="%H:%M:%S")
+    file_handler.setFormatter(formatter)
+    file_handler.setLevel(logging.DEBUG)
+
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+    console_handler.setLevel(logging.INFO)
+
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+    return logger
