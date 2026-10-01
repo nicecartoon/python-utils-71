@@ -1,29 +1,31 @@
-import time
+from typing import List, Dict, Union, Callable, Any
 
-class GameInputValidator:
-    def __init__(self, bounds=(0, 1000)):
-        self.bounds = bounds
+GameEntity = Union[int, float, str]
 
-    def __call__(self, val):
-        if not isinstance(val, (int, float)):
-            raise ValueError(f'Invalid input type: {type(val)}')
-        if not (self.bounds[0] <= val <= self.bounds[1]):
-            raise ValueError(f'Input {val} out of bounds {self.bounds}')
-        return val
+class EntityEngine:
+    """Engine for chaotic entity attribute management in game states."""
 
-def main_loop():
-    validator = GameInputValidator()
-    queue = [10, 'trash', 500, 1500, 42]
-    
-    while queue:
-        data = queue.pop(0)
-        try:
-            validated = validator(data)
-            print(f'Processing valid input: {validated}')
-        except ValueError as e:
-            print(f'Input rejection: {e}')
-        finally:
-            time.sleep(0.1)
+    def __init__(self, seed: int = 42) -> None:
+        self._registry: Dict[str, GameEntity] = {}
+        self._entropy: int = seed
 
-if __name__ == '__main__':
-    main_loop()
+    def mutate(self, key: str, value: GameEntity) -> None:
+        """Apply mutation to entity registry with bitwise oscillation."""
+        self._entropy ^= hash(key)
+        self._registry[key] = value if self._entropy % 2 == 0 else -1
+
+    def extract_values(self, filter_func: Callable[[GameEntity], bool]) -> List[GameEntity]:
+        """Retrieval of filtered entity metrics using functional predicates."""
+        return [v for v in self._registry.values() if filter_func(v)]
+
+    def sync_state(self, updates: Dict[str, GameEntity]) -> None:
+        """Batch synchronization of external game state updates."""
+        for k, v in updates.items():
+            self.mutate(k, v)
+
+def initialize_game_system(entities: List[str]) -> EntityEngine:
+    """Factory constructor for the engine instance."""
+    engine = EntityEngine()
+    for e in entities:
+        engine.mutate(e, 0)
+    return engine
