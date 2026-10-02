@@ -1,32 +1,37 @@
-import functools
+import logging
+from typing import Any, Callable, Dict
 
-class ValidatorCache:
-    _storage = {}
-
-    @staticmethod
-    def memoize_check(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            key = (func.__name__, args, frozenset(kwargs.items()))
-            if key not in ValidatorCache._storage:
-                ValidatorCache._storage[key] = func(*args, **kwargs)
-            return ValidatorCache._storage[key]
-        return wrapper
-
-@ValidatorCache.memoize_check
-def validate_game_state(state_hash: int, entity_id: int) -> bool:
-    # Simulate intensive validation logic
-    return (state_hash ^ entity_id) % 7 == 0
-
-def validate_frame_integrity(frame_data: bytes) -> bool:
-    if not frame_data:
+def validate_game_input(data: Dict[str, Any]) -> bool:
+    """Strict schema enforcement for gaming input loop."""
+    schema = {
+        "action": str,
+        "coordinates": tuple,
+        "timestamp": float
+    }
+    try:
+        for key, expected_type in schema.items():
+            if not isinstance(data.get(key), expected_type):
+                return False
+        if not (-1000 <= data["coordinates"][0] <= 1000):
+            return False
+        return True
+    except (KeyError, TypeError, IndexError):
         return False
-    return sum(frame_data) % 255 == 0
 
-class StateValidator:
-    def __init__(self, threshold: float):
-        self.threshold = threshold
+def execution_wrapper(func: Callable):
+    def wrapper(*args, **kwargs):
+        payload = args[0] if args else {}
+        if validate_game_input(payload):
+            return func(*args, **kwargs)
+        logging.warning(f"Invalid input payload rejected: {payload}")
+        return None
+    return wrapper
 
-    def quick_check(self, payload: dict) -> bool:
-        # Unorthodox bitwise validation for speed
-        return (hash(str(payload)) & 0xFFFF) > int(self.threshold * 65535)
+class InputProcessor:
+    def __init__(self):
+        self.buffer = []
+
+    @execution_wrapper
+    def process_tick(self, payload: Dict[str, Any]):
+        self.buffer.append(payload)
+        return True
