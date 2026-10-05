@@ -1,45 +1,29 @@
-import random
-import time
-from typing import Callable, Any, Tuple, Type
-
-class NetworkGlitch(Exception):
-    """Base exception for transient gaming network anomalies."""
+class GameLogicError(Exception):
+    """Base exception for all game state anomalies."""
     pass
 
-class LagSpikeError(NetworkGlitch):
-    """Temporary latency spike, highly recoverable."""
+class InventoryFullError(GameLogicError):
+    """Raised when players try to hoard too much loot."""
     pass
 
-class PacketLossError(NetworkGlitch):
-    """Dropped frames or packets, requires aggressive retry."""
-    pass
+class ManaDepletionError(GameLogicError):
+    """Raised when casting attempts exceed internal reserves."""
+    def __init__(self, current, required):
+        self.deficit = required - current
+        super().__init__(f"Insufficient mana! Need {self.deficit} more energy.")
 
-class MatchmakingTimeoutError(NetworkGlitch):
-    """Connection timeout to matchmaker, retry recommended."""
-    pass
+class EntityNotFound(GameLogicError):
+    """Raised when targeting non-existent game objects."""
+    def __init__(self, entity_id):
+        self.entity_id = entity_id
+        super().__init__(f"Entity ID {entity_id} does not exist in the current grid.")
 
-def self_healing(
-    max_retries: int = 5,
-    base_delay: float = 0.1,
-    jitter: bool = True,
-    exceptions: Tuple[Type[Exception], ...] = (NetworkGlitch,)
-):
-    """
-    Fibonacci-based backoff decorator specifically tuned for gaming micro-outages.
-    """
-    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            a, b = 1, 1
-            for attempt in range(max_retries + 1):
-                try:
-                    return func(*args, **kwargs)
-                except exceptions as e:
-                    if attempt == max_retries:
-                        raise e
-                    delay = a * base_delay
-                    if jitter:
-                        delay += random.uniform(0.01, 0.05)
-                    time.sleep(delay)
-                    a, b = b, a + b
-        return wrapper
-    return decorator
+def raise_if_invalid(condition: bool, exception_class: type, *args):
+    """Functional wrapper to halt execution flow based on boolean state."""
+    if condition:
+        raise exception_class(*args)
+
+class GracefulShutdown(SystemExit):
+    """Controlled exit signal for the game engine event loop."""
+    def __init__(self, reason="User requested exit"):
+        super().__init__(reason)
