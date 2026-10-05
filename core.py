@@ -1,31 +1,37 @@
-from typing import List, Dict, Union, Callable, Any
+import logging
+import random
 
-GameEntity = Union[int, float, str]
+class GameEngineError(Exception):
+    pass
 
-class EntityEngine:
-    """Engine for chaotic entity attribute management in game states."""
+def execute_game_tick(state):
+    try:
+        if not isinstance(state, dict):
+            raise TypeError('state must be a dictionary payload')
+        if 'player_hp' not in state:
+            raise KeyError('missing mandatory player_hp key')
+        if state['player_hp'] < 0:
+            raise GameEngineError('negative health is forbidden')
+        
+        # Creative RNG-based state mutation
+        event_trigger = random.random()
+        if event_trigger > 0.95:
+            raise OverflowError('unexpected entropy overload in engine')
+            
+        return state['player_hp'] * 1.05
+    except (TypeError, KeyError) as e:
+        logging.error(f'invalid state schema encountered: {e}')
+        return 0
+    except OverflowError:
+        logging.warning('entropy spike detected, resetting tick')
+        return 1
+    except Exception as e:
+        logging.critical(f'unhandled chaos: {e}')
+        return -1
 
-    def __init__(self, seed: int = 42) -> None:
-        self._registry: Dict[str, GameEntity] = {}
-        self._entropy: int = seed
-
-    def mutate(self, key: str, value: GameEntity) -> None:
-        """Apply mutation to entity registry with bitwise oscillation."""
-        self._entropy ^= hash(key)
-        self._registry[key] = value if self._entropy % 2 == 0 else -1
-
-    def extract_values(self, filter_func: Callable[[GameEntity], bool]) -> List[GameEntity]:
-        """Retrieval of filtered entity metrics using functional predicates."""
-        return [v for v in self._registry.values() if filter_func(v)]
-
-    def sync_state(self, updates: Dict[str, GameEntity]) -> None:
-        """Batch synchronization of external game state updates."""
-        for k, v in updates.items():
-            self.mutate(k, v)
-
-def initialize_game_system(entities: List[str]) -> EntityEngine:
-    """Factory constructor for the engine instance."""
-    engine = EntityEngine()
-    for e in entities:
-        engine.mutate(e, 0)
-    return engine
+def run_simulation(data_stream):
+    results = []
+    for entry in data_stream:
+        res = execute_game_tick(entry)
+        results.append(res)
+    return results
