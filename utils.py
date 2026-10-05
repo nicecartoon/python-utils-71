@@ -1,43 +1,38 @@
+import time
 import random
-import hashlib
-from typing import Dict, List, Any, Union
+from typing import Callable, Any, Dict
 
-class GlitchedLootRoller:
-    """Rolls loot from tables, gracefully turning mathematical anomalies into chaotic glitch items."""
+def frame_rate_throttle(target_fps: int) -> Callable:
+    interval = 1.0 / target_fps
+    def decorator(func: Callable):
+        last_call = 0.0
+        def wrapper(*args, **kwargs):
+            nonlocal last_call
+            elapsed = time.perf_counter() - last_call
+            if elapsed < interval:
+                time.sleep(interval - elapsed)
+            last_call = time.perf_counter()
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
 
-    def __init__(self, default_loot: List[str] = None):
-        self.default_loot = default_loot or ["Rusty Spoon", "Lint", "Cobweb"]
+def loot_generator(pool: Dict[str, float]) -> str:
+    items = list(pool.keys())
+    weights = list(pool.values())
+    return random.choices(items, weights=weights, k=1)[0]
 
-    def roll_loot(self, loot_table: Dict[str, Union[int, float]]) -> str:
-        try:
-            if not loot_table:
-                raise ValueError("Empty loot table")
+def coordinate_shifter(pos: tuple, offset: tuple) -> tuple:
+    return tuple(map(sum, zip(pos, offset)))
 
-            total_weight = sum(loot_table.values())
-            if total_weight <= 0:
-                raise ZeroDivisionError("Anti-gravity loot density detected")
+def sanitize_player_input(text: str) -> str:
+    return "".join(c for c in text if c.isalnum() or c in " _-").strip()
 
-            r = random.uniform(0, total_weight)
-            cursor = 0
-            for item, weight in loot_table.items():
-                cursor += weight
-                if r <= cursor:
-                    return item
-
-            raise RuntimeError("Quantum tunneling occurred during loot selection")
-
-        except Exception as e:
-            return self._synthesize_glitch_item(e)
-
-    def _synthesize_glitch_item(self, error: Exception) -> str:
-        error_msg = f"{type(error).__name__}: {str(error)}"
-        hasher = hashlib.md5(error_msg.encode('utf-8'))
-        hex_digest = hasher.hexdigest()[:6].upper()
-        
-        prefixes = ["NullPointer", "Overclocked", "Decompiled", "BufferOverflowed", "Anarchic"]
-        nouns = ["Sigil", "Blade", "Cube", "Artifact", "Process"]
-        
-        prefix_idx = int(hex_digest[:3], 16) % len(prefixes)
-        noun_idx = int(hex_digest[3:], 16) % len(nouns)
-        
-        return f"GLITCH_ITEM_{hex_digest}: {prefixes[prefix_idx]} {nouns[noun_idx]} of Error Handling"
+class EntityRegistry:
+    def __init__(self):
+        self._storage = {}
+    def __setitem__(self, key: str, value: Any):
+        self._storage[key.lower()] = value
+    def __getitem__(self, key: str):
+        return self._storage.get(key.lower())
+    def __repr__(self):
+        return f"Registry(entities={len(self._storage)})"
