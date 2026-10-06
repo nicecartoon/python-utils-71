@@ -1,31 +1,38 @@
-import logging
-import functools
+import time
+import random
+from typing import Callable, Any, Dict
 
-class GamingException(Exception):
-    """Base exception for python-utils-71 engine events."""
-    pass
+def frame_throttler(fps: int) -> Callable:
+    interval = 1.0 / fps
+    def decorator(func: Callable) -> Callable:
+        def wrapper(*args, **kwargs) -> Any:
+            start = time.perf_counter()
+            result = func(*args, **kwargs)
+            elapsed = time.perf_counter() - start
+            if elapsed < interval:
+                time.sleep(interval - elapsed)
+            return result
+        return wrapper
+    return decorator
 
-def recover_game_state(func):
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        except (ValueError, TypeError, AttributeError) as e:
-            logging.error(f"Entropy spike in {func.__name__}: {e}")
-            return None
-        except Exception as fatal:
-            logging.critical(f"Engine meltdown: {fatal}")
-            raise GamingException("System integrity compromised") from fatal
-    return wrapper
+def loot_generator(pool: Dict[str, float]) -> str:
+    items = list(pool.keys())
+    weights = list(pool.values())
+    return random.choices(items, weights=weights, k=1)[0]
 
-@recover_game_state
-def process_tick(payload):
-    if not isinstance(payload, dict):
-        raise ValueError("Malformed tick data received")
-    if 'player_id' not in payload:
-        raise AttributeError("Missing player_id during frame sync")
-    return f"Tick {payload.get('tick_id', 0)} processed for {payload['player_id']}"
+class StateSyncHandler:
+    def __init__(self, tick_rate: int = 60):
+        self.tick_rate = tick_rate
+        self.buffer = []
 
-def graceful_shutdown(signal_code, frame):
-    logging.info("Clearing buffers for safe game exit")
-    exit(0)
+    def pack_entity_data(self, entity_id: int, pos: tuple) -> str:
+        return f"sync:{entity_id}:{pos[0]}|{pos[1]}"
+
+    def process_queue(self) -> None:
+        while self.buffer:
+            msg = self.buffer.pop(0)
+            print(f"Broadcasting: {msg}")
+
+def jitter_simulator(latency_ms: int = 50) -> None:
+    delay = (random.randint(-10, 10) + latency_ms) / 1000.0
+    time.sleep(max(0, delay))
