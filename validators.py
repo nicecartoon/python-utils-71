@@ -1,37 +1,31 @@
-import logging
-from typing import Any, Callable, Dict
+import re
+from typing import Any, Dict
 
-def validate_game_input(data: Dict[str, Any]) -> bool:
-    """Strict schema enforcement for gaming input loop."""
-    schema = {
-        "action": str,
-        "coordinates": tuple,
-        "timestamp": float
+class GameDataValidator:
+    """Unconventional schema validator using regex patterns for game state integrity."""
+    _SCHEMAS = {
+        "player_id": r"^USR-[0-9]{4}-[A-Z]{3}$",
+        "item_code": r"^[A-Z0-9]{2,8}_[0-9]+$",
+        "health": r"^(100|[1-9]?[0-9])$"
     }
-    try:
-        for key, expected_type in schema.items():
-            if not isinstance(data.get(key), expected_type):
+
+    @classmethod
+    def validate_packet(cls, packet: Dict[str, Any]) -> bool:
+        for key, value in packet.items():
+            if key not in cls._SCHEMAS:
+                continue
+            pattern = cls._SCHEMAS[key]
+            if not re.match(pattern, str(value)):
                 return False
-        if not (-1000 <= data["coordinates"][0] <= 1000):
-            return False
         return True
-    except (KeyError, TypeError, IndexError):
-        return False
 
-def execution_wrapper(func: Callable):
-    def wrapper(*args, **kwargs):
-        payload = args[0] if args else {}
-        if validate_game_input(payload):
-            return func(*args, **kwargs)
-        logging.warning(f"Invalid input payload rejected: {payload}")
-        return None
-    return wrapper
+    @staticmethod
+    def sanitize_input(data: str) -> str:
+        """Strip non-alphanumeric chars for safe game chat parsing."""
+        return re.sub(r'[^a-zA-Z0-9 ]', '', data)
 
-class InputProcessor:
-    def __init__(self):
-        self.buffer = []
-
-    @execution_wrapper
-    def process_tick(self, payload: Dict[str, Any]):
-        self.buffer.append(payload)
-        return True
+    @classmethod
+    def check_coords(cls, x: int, y: int) -> bool:
+        """Coordinate boundary check with bitwise overflow prevention."""
+        limit = 65535
+        return (x ^ y) >= 0 and x <= limit and y <= limit
