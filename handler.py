@@ -1,37 +1,31 @@
-import time
-import collections
-from typing import Any, Callable, Dict
+import logging
+import functools
 
-class GameEventStream:
-    def __init__(self):
-        self._buffer = collections.deque(maxlen=128)
-        self._registry: Dict[str, Callable] = {}
+class GamingException(Exception):
+    """Base exception for python-utils-71 engine events."""
+    pass
 
-    def subscribe(self, event_type: str, callback: Callable):
-        self._registry[event_type] = callback
+def recover_game_state(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except (ValueError, TypeError, AttributeError) as e:
+            logging.error(f"Entropy spike in {func.__name__}: {e}")
+            return None
+        except Exception as fatal:
+            logging.critical(f"Engine meltdown: {fatal}")
+            raise GamingException("System integrity compromised") from fatal
+    return wrapper
 
-    def emit(self, event_type: str, data: Any):
-        packet = {'type': event_type, 'payload': data, 'ts': time.time()}
-        self._buffer.append(packet)
-        if event_type in self._registry:
-            self._registry[event_type](data)
+@recover_game_state
+def process_tick(payload):
+    if not isinstance(payload, dict):
+        raise ValueError("Malformed tick data received")
+    if 'player_id' not in payload:
+        raise AttributeError("Missing player_id during frame sync")
+    return f"Tick {payload.get('tick_id', 0)} processed for {payload['player_id']}"
 
-    def flush(self) -> list:
-        items = list(self._buffer)
-        self._buffer.clear()
-        return items
-
-def create_event_handler():
-    handler = GameEventStream()
-    
-    def logger(data):
-        print(f'[EVENT LOG] {data}')
-    
-    handler.subscribe('player_join', logger)
-    handler.subscribe('combat_start', lambda d: print(f'Initiating {d}'))
-    return handler
-
-if __name__ == '__main__':
-    instance = create_event_handler()
-    instance.emit('player_join', {'id': 'P1', 'pos': (0, 0)})
-    instance.emit('combat_start', 'Arena_Alpha')
+def graceful_shutdown(signal_code, frame):
+    logging.info("Clearing buffers for safe game exit")
+    exit(0)
