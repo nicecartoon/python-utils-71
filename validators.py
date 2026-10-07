@@ -1,31 +1,21 @@
-import re
-from typing import Any, Dict
+from typing import Union, Callable, Any
 
-class GameDataValidator:
-    """Unconventional schema validator using regex patterns for game state integrity."""
-    _SCHEMAS = {
-        "player_id": r"^USR-[0-9]{4}-[A-Z]{3}$",
-        "item_code": r"^[A-Z0-9]{2,8}_[0-9]+$",
-        "health": r"^(100|[1-9]?[0-9])$"
-    }
+def validate_game_state(state: dict[str, Any]) -> bool:
+    """Checks if player stats are within the game balance limits."""
+    limits = {'health': (0, 100), 'mana': (0, 500), 'xp': (0, float('inf'))}
+    return all(limits[k][0] <= state[k] <= limits[k][1] for k in limits if k in state)
 
-    @classmethod
-    def validate_packet(cls, packet: Dict[str, Any]) -> bool:
-        for key, value in packet.items():
-            if key not in cls._SCHEMAS:
-                continue
-            pattern = cls._SCHEMAS[key]
-            if not re.match(pattern, str(value)):
-                return False
-        return True
+def sanitize_input(data: Union[str, int]) -> str:
+    """Cleans player input to prevent injection in game chat."""
+    return str(data).replace('<', '').replace('>', '').strip()
 
-    @staticmethod
-    def sanitize_input(data: str) -> str:
-        """Strip non-alphanumeric chars for safe game chat parsing."""
-        return re.sub(r'[^a-zA-Z0-9 ]', '', data)
+def chain_validator(func: Callable[[Any], bool], fallback: Any) -> Callable[[Any], Any]:
+    """Higher order function wrapper for risky data processing."""
+    def wrapper(value: Any) -> Any:
+        try:
+            return value if func(value) else fallback
+        except Exception:
+            return fallback
+    return wrapper
 
-    @classmethod
-    def check_coords(cls, x: int, y: int) -> bool:
-        """Coordinate boundary check with bitwise overflow prevention."""
-        limit = 65535
-        return (x ^ y) >= 0 and x <= limit and y <= limit
+check_level_cap = chain_validator(lambda x: isinstance(x, int) and x < 99, 1)
