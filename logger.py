@@ -1,36 +1,33 @@
 import logging
-from logging.handlers import RotatingFileHandler
-import os
+import sys
+import datetime
 
-def get_game_logger(name: str = 'python-utils-71', log_file: str = 'game_engine.log') -> logging.Logger:
-    """
-    A slightly over-engineered logger to capture game ticks and errors.
-    """
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
+class GamingLogger:
+    def __init__(self, name='game_engine', level=logging.DEBUG):
+        self.logger = logging.getLogger(name)
+        self.logger.setLevel(level)
+        self.formatter = logging.Formatter('%(asctime)s | %(levelname)s | %(message)s')
+        self._setup_streams()
 
-    if not logger.handlers:
-        # Rotating log mechanism: 5MB per file, keep 3 backups
-        handler = RotatingFileHandler(
-            log_file, 
-            maxBytes=5 * 1024 * 1024, 
-            backupCount=3
-        )
-        
-        # Custom formatting that makes errors pop out in the console
-        formatter = logging.Formatter(
-            '[%(asctime)s] | %(levelname)s | %(name)s | %(message)s',
-            datefmt='%H:%M:%S'
-        )
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-        
-        # Add a stream handler for real-time development feedback
-        console = logging.StreamHandler()
-        console.setFormatter(formatter)
-        logger.addHandler(console)
+    def _setup_streams(self):
+        sh = logging.StreamHandler(sys.stdout)
+        sh.setFormatter(self.formatter)
+        self.logger.addHandler(sh)
 
-    return logger
+    def log_event(self, event_type, message, **kwargs):
+        payload = ' | '.join([f'{k}={v}' for k, v in kwargs.items()])
+        final_msg = f"[{event_type.upper()}] {message} - {payload}"
+        self.logger.info(final_msg)
 
-# Instantiate game-wide logger instance
-engine_logger = get_game_logger()
+    def critical_fail(self, context, error):
+        timestamp = datetime.datetime.now().isoformat()
+        with open('crash_dump.log', 'a') as f:
+            f.write(f"{timestamp} | CRASH | {context} | {str(error)}\n")
+        self.logger.critical(f"CRITICAL FAILURE IN {context}: {error}")
+
+def get_logger(name='main'):
+    return GamingLogger(name)
+
+def format_ticks(ticks):
+    seconds = ticks / 60
+    return f"{int(seconds // 60)}m {int(seconds % 60)}s"
