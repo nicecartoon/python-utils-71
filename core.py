@@ -1,37 +1,41 @@
-import logging
-import random
+import functools
+import time
+from typing import Callable, Any
 
-class GameEngineError(Exception):
-    pass
+class GameState:
+    def __init__(self):
+        self.registry = {}
 
-def execute_game_tick(state):
-    try:
-        if not isinstance(state, dict):
-            raise TypeError('state must be a dictionary payload')
-        if 'player_hp' not in state:
-            raise KeyError('missing mandatory player_hp key')
-        if state['player_hp'] < 0:
-            raise GameEngineError('negative health is forbidden')
-        
-        # Creative RNG-based state mutation
-        event_trigger = random.random()
-        if event_trigger > 0.95:
-            raise OverflowError('unexpected entropy overload in engine')
-            
-        return state['player_hp'] * 1.05
-    except (TypeError, KeyError) as e:
-        logging.error(f'invalid state schema encountered: {e}')
-        return 0
-    except OverflowError:
-        logging.warning('entropy spike detected, resetting tick')
-        return 1
-    except Exception as e:
-        logging.critical(f'unhandled chaos: {e}')
-        return -1
+    def __getitem__(self, key: str) -> Any:
+        return self.registry.get(key)
 
-def run_simulation(data_stream):
-    results = []
-    for entry in data_stream:
-        res = execute_game_tick(entry)
-        results.append(res)
-    return results
+    def __setitem__(self, key: str, value: Any) -> None:
+        self.registry[key] = value
+
+def throttle(fps: int) -> Callable:
+    interval = 1.0 / fps
+    def decorator(func: Callable) -> Callable:
+        last_call = [0.0]
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            now = time.time()
+            if now - last_call[0] >= interval:
+                last_call[0] = now
+                return func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+class Engine:
+    def __init__(self):
+        self.state = GameState()
+    
+    @throttle(60)
+    def tick(self, logic_func: Callable) -> None:
+        logic_func(self.state)
+
+def initialize_environment() -> Engine:
+    return Engine()
+
+if __name__ == '__main__':
+    game = initialize_environment()
+    game.tick(lambda s: print(f'Frame active at {time.time()}'))
