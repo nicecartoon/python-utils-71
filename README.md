@@ -1,51 +1,50 @@
 # python-utils-71
 
-`python-utils-71` is a specialized Python toolkit designed to streamline common tasks in game development and live service operations. It provides high-performance utilities for processing binary game assets, interacting with regional game APIs, and managing local configuration caches.
+A lightweight collection of Python utilities designed to streamline gaming development and automated task processing. This toolkit provides high-performance helpers for memory management, API integration, and game data parsing.
+
+## Features
+
+*   **Memory Scanner:** Low-latency pointer chaining and byte-pattern searching for debugging game processes.
+*   **Packet Parser:** Built-in decoders for common binary serialization formats used in real-time multiplayer networking.
+*   **Config Hot-Reloader:** Thread-safe JSON/YAML configuration management that monitors files for updates without restarting your script.
+*   **Input Emulator:** Platform-agnostic interface for injecting mouse and keyboard events into windowed game applications.
+
+## Installation
+
+Ensure you have Python 3.8+ installed. Install the package directly via pip:
+
+```bash
+pip install python-utils-71
+```
+
+For developers requiring the latest cutting-edge features, clone the repository and install from source:
+
+```bash
+git clone https://github.com/Developer/python-utils-71.git
+cd python-utils-71
+pip install -e .
+```
+
+## Usage
+
+Here is a quick example of how to use the memory scanner to track a player's health variable in a game process:
+
+```python
+from pyutils71 import MemoryScanner
+
+# Attach to the game process by name
+scanner = MemoryScanner(process_name="game.exe")
+
+# Define pattern for health (e.g., 4-byte integer)
+health_address = scanner.find_pattern("89 05 ? ? ? ? 8B 46 08")
+
+if health_address:
+    current_health = scanner.read_int(health_address)
+    print(f"Current Player Health: {current_health}")
+```
+
+## License
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-### Key Features
-
-*   **Binary Parser Engine:** Efficiently unpacks and serializes custom game data formats (.dat/.pak) into readable JSON structures.
-*   **Latency Optimizer:** Includes a low-level network probe to measure jitter and ping against game backend endpoints.
-*   **Config Sync Manager:** Handles atomic read/write operations for local client settings, preventing corruption during abrupt game crashes.
-*   **Asset Hash Validator:** Provides fast MD5/SHA256 integrity checking to ensure local game files match server-side manifests.
-
-### Installation
-
-Ensure you have Python 3.9+ installed. You can install the package directly via pip:
-
-```bash
-# Clone the repository
-git clone https://github.com/Developer/python-utils-71.git
-cd python-utils-71
-
-# Install requirements
-pip install -r requirements.txt
-
-# Install as a local package
-pip install .
-```
-
-### Usage
-
-Below is a quick example of how to use the `AssetHashValidator` to verify your local game files before launching.
-
-```python
-from utils_71.integrity import AssetHashValidator
-
-# Initialize validator with the game data directory
-validator = AssetHashValidator(data_path="./game_data")
-
-# Check integrity against a remote manifest
-is_valid = validator.verify_manifest("server_manifest.json")
-
-if is_valid:
-    print("Files verified. Launching game...")
-else:
-    print("Corruption detected. Initiating repair protocol.")
-```
-
-### License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Distributed under the MIT License. See `LICENSE` for more information.
