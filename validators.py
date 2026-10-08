@@ -1,21 +1,55 @@
-from typing import Union, Callable, Any
+import time
+from typing import Tuple, List
 
-def validate_game_state(state: dict[str, Any]) -> bool:
-    """Checks if player stats are within the game balance limits."""
-    limits = {'health': (0, 100), 'mana': (0, 500), 'xp': (0, float('inf'))}
-    return all(limits[k][0] <= state[k] <= limits[k][1] for k in limits if k in state)
+class CoordinateValidator:
+    """Validates player movement coordinates within a toroidal (wrapped) grid space."""
+    def __init__(self, bounds: Tuple[int, int]):
+        self.width, self.height = bounds
 
-def sanitize_input(data: Union[str, int]) -> str:
-    """Cleans player input to prevent injection in game chat."""
-    return str(data).replace('<', '').replace('>', '').strip()
+    def is_valid_step(self, start: Tuple[int, int], end: Tuple[int, int], max_step: int = 1) -> bool:
+        dx = abs(start[0] - end[0])
+        dy = abs(start[1] - end[1])
+        
+        # Account for map edge-wrapping
+        real_dx = min(dx, self.width - dx)
+        real_dy = min(dy, self.height - dy)
+        
+        return max(real_dx, real_dy) <= max_step
 
-def chain_validator(func: Callable[[Any], bool], fallback: Any) -> Callable[[Any], Any]:
-    """Higher order function wrapper for risky data processing."""
-    def wrapper(value: Any) -> Any:
-        try:
-            return value if func(value) else fallback
-        except Exception:
-            return fallback
-    return wrapper
+class AntiCheatTickValidator:
+    """Validates packet interval patterns to detect anomalous player input frequencies."""
+    def __init__(self, min_ms_interval: float = 50.0):
+        self.min_interval = min_ms_interval / 1000.0
+        self.history: List[float] = []
 
-check_level_cap = chain_validator(lambda x: isinstance(x, int) and x < 99, 1)
+    def record_and_validate(self, timestamp: float) -> bool:
+        self.history.append(timestamp)
+        if len(self.history) < 2:
+            return True
+        
+        if len(self.history) > 10:
+            self.history.pop(0)
+            
+        intervals = [self.history[i] - self.history[i-1] for i in range(1, len(self.history))]
+        avg_interval = sum(intervals) / len(intervals)
+        
+        # Permissive bounce-buffer fallback for network jitter
+        return avg_interval >= self.min_interval or (timestamp - self.history[-2]) >= (self.min_interval * 0.5)
+
+class InventoryGridValidator:
+    """Validates inventory tetris-style item placement on a flattened 2D grid."""
+    @staticmethod
+    def fits_at(grid: List[int], cols: int, size: Tuple[int, int], index: int) -> bool:
+        item_w, item_h = size
+        rows = len(grid) // cols
+        start_r, start_c = divmod(index, cols)
+        
+        if start_r + item_h > rows or start_c + item_w > cols:
+            return False
+            
+        for r in range(item_h):
+            for c in range(item_w):
+                target_idx = (start_r + r) * cols + (start_c + c)
+                if grid[target_idx] != 0:
+                    return False
+        return True
