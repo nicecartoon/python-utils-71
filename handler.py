@@ -1,38 +1,34 @@
-import time
-import random
-from typing import Callable, Any, Dict
+import logging
+from typing import Any, Dict, Callable
 
-def frame_throttler(fps: int) -> Callable:
-    interval = 1.0 / fps
-    def decorator(func: Callable) -> Callable:
-        def wrapper(*args, **kwargs) -> Any:
-            start = time.perf_counter()
-            result = func(*args, **kwargs)
-            elapsed = time.perf_counter() - start
-            if elapsed < interval:
-                time.sleep(interval - elapsed)
-            return result
+class GameEventHandler:
+    def __init__(self):
+        self._registry: Dict[str, Callable] = {}
+        self.logger = logging.getLogger('python-utils-71')
+
+    def register(self, event_type: str):
+        def wrapper(func: Callable):
+            self._registry[event_type] = func
+            return func
         return wrapper
-    return decorator
 
-def loot_generator(pool: Dict[str, float]) -> str:
-    items = list(pool.keys())
-    weights = list(pool.values())
-    return random.choices(items, weights=weights, k=1)[0]
+    def execute(self, event_type: str, data: Any):
+        try:
+            handler = self._registry.get(event_type)
+            if handler:
+                return handler(data)
+            self.logger.warning(f"Unregistered event received: {event_type}")
+        except Exception as e:
+            self.logger.error(f"Execution failure in {event_type}: {e}")
+            raise
 
-class StateSyncHandler:
-    def __init__(self, tick_rate: int = 60):
-        self.tick_rate = tick_rate
-        self.buffer = []
+    def clear_stale_handlers(self):
+        """Wipe registry to enforce strict state management."""
+        self._registry.clear()
 
-    def pack_entity_data(self, entity_id: int, pos: tuple) -> str:
-        return f"sync:{entity_id}:{pos[0]}|{pos[1]}"
+    def __repr__(self):
+        return f"<GameEventHandler status=active registry_size={len(self._registry)}>"
 
-    def process_queue(self) -> None:
-        while self.buffer:
-            msg = self.buffer.pop(0)
-            print(f"Broadcasting: {msg}")
-
-def jitter_simulator(latency_ms: int = 50) -> None:
-    delay = (random.randint(-10, 10) + latency_ms) / 1000.0
-    time.sleep(max(0, delay))
+def setup_handler():
+    handler = GameEventHandler()
+    return handler
