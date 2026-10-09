@@ -1,34 +1,34 @@
-import logging
-from typing import Any, Dict, Callable
+import time
+import collections
+from typing import Dict, Any, Callable
 
 class GameEventHandler:
     def __init__(self):
-        self._registry: Dict[str, Callable] = {}
-        self.logger = logging.getLogger('python-utils-71')
+        self._registry = collections.defaultdict(list)
+        self._history = collections.deque(maxlen=100)
 
-    def register(self, event_type: str):
-        def wrapper(func: Callable):
-            self._registry[event_type] = func
-            return func
-        return wrapper
+    def subscribe(self, event_type: str, callback: Callable):
+        self._registry[event_type].append(callback)
 
-    def execute(self, event_type: str, data: Any):
-        try:
-            handler = self._registry.get(event_type)
-            if handler:
-                return handler(data)
-            self.logger.warning(f"Unregistered event received: {event_type}")
-        except Exception as e:
-            self.logger.error(f"Execution failure in {event_type}: {e}")
-            raise
+    def emit(self, event_type: str, payload: Dict[str, Any]):
+        timestamp = time.time()
+        entry = {'type': event_type, 'data': payload, 'time': timestamp}
+        self._history.append(entry)
+        
+        for callback in self._registry.get(event_type, []):
+            try:
+                callback(payload)
+            except Exception as e:
+                print(f'Critical failure in handler {callback}: {e}')
 
-    def clear_stale_handlers(self):
-        """Wipe registry to enforce strict state management."""
-        self._registry.clear()
+    def get_event_stats(self) -> Dict[str, int]:
+        stats = collections.Counter(e['type'] for e in self._history)
+        return dict(stats)
+
+    def flush_stale_events(self, threshold: float = 3600.0):
+        now = time.time()
+        while self._history and (now - self._history[0]['time']) > threshold:
+            self._history.popleft()
 
     def __repr__(self):
-        return f"<GameEventHandler status=active registry_size={len(self._registry)}>"
-
-def setup_handler():
-    handler = GameEventHandler()
-    return handler
+        return f'<GameEventHandler registry_size={len(self._registry)}>'
