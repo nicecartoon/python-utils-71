@@ -1,38 +1,30 @@
 import time
+import functools
 import random
-from typing import Callable, Any, Dict
 
-def frame_rate_throttle(target_fps: int) -> Callable:
-    interval = 1.0 / target_fps
-    def decorator(func: Callable):
-        last_call = 0.0
+def retry_network_ops(retries=3, delay=1.5, backoff=2):
+    def decorator(func):
+        @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            nonlocal last_call
-            elapsed = time.perf_counter() - last_call
-            if elapsed < interval:
-                time.sleep(interval - elapsed)
-            last_call = time.perf_counter()
-            return func(*args, **kwargs)
+            attempt = 0
+            current_delay = delay
+            while attempt < retries:
+                try:
+                    return func(*args, **kwargs)
+                except (ConnectionError, TimeoutError) as e:
+                    attempt += 1
+                    if attempt == retries:
+                        raise e
+                    jitter = random.uniform(0, 0.1 * current_delay)
+                    time.sleep(current_delay + jitter)
+                    current_delay *= backoff
         return wrapper
     return decorator
 
-def loot_generator(pool: Dict[str, float]) -> str:
-    items = list(pool.keys())
-    weights = list(pool.values())
-    return random.choices(items, weights=weights, k=1)[0]
-
-def coordinate_shifter(pos: tuple, offset: tuple) -> tuple:
-    return tuple(map(sum, zip(pos, offset)))
-
-def sanitize_player_input(text: str) -> str:
-    return "".join(c for c in text if c.isalnum() or c in " _-").strip()
-
-class EntityRegistry:
-    def __init__(self):
-        self._storage = {}
-    def __setitem__(self, key: str, value: Any):
-        self._storage[key.lower()] = value
-    def __getitem__(self, key: str):
-        return self._storage.get(key.lower())
-    def __repr__(self):
-        return f"Registry(entities={len(self._storage)})"
+class GameNetworkClient:
+    @retry_network_ops(retries=5, delay=1.0)
+    def fetch_leaderboard(self, region):
+        # Simulate unstable gaming infrastructure connectivity
+        if random.random() < 0.7:
+            raise ConnectionError("Server node unreachable")
+        return {"region": region, "top_score": 9999}
