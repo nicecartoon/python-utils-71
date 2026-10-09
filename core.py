@@ -1,41 +1,51 @@
-import functools
-import time
-from typing import Callable, Any
+import re
+from typing import Callable, List, Dict
 
-class GameState:
+class GameValidator:
+    def __init__(self, predicate: Callable[[List[str]], bool], error_msg: str):
+        self.predicate = predicate
+        self.error_msg = error_msg
+
+    def __and__(self, other: "GameValidator") -> "GameValidator":
+        return GameValidator(
+            lambda tokens: self.predicate(tokens) and other.predicate(tokens),
+            f"{self.error_msg} AND {other.error_msg}"
+        )
+
+def is_action(action: str) -> GameValidator:
+    return GameValidator(lambda t: len(t) > 0 and t[0].upper() == action.upper(), f"must start with {action}")
+
+def arg_count(count: int) -> GameValidator:
+    return GameValidator(lambda t: len(t) == count, f"must have exactly {count} parts")
+
+def numeric_arg(index: int) -> GameValidator:
+    def check(t: List[str]) -> bool:
+        return index < len(t) and t[index].isdigit()
+    return GameValidator(check, f"parameter at index {index} must be numeric")
+
+class GameLoopProcessor:
     def __init__(self):
-        self.registry = {}
+        self.rules = {
+            "MOVE": is_action("MOVE") & arg_count(2),
+            "CAST": is_action("CAST") & arg_count(3) & numeric_arg(2),
+            "EQUIP": is_action("EQUIP") & arg_count(2)
+        }
 
-    def __getitem__(self, key: str) -> Any:
-        return self.registry.get(key)
-
-    def __setitem__(self, key: str, value: Any) -> None:
-        self.registry[key] = value
-
-def throttle(fps: int) -> Callable:
-    interval = 1.0 / fps
-    def decorator(func: Callable) -> Callable:
-        last_call = [0.0]
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            now = time.time()
-            if now - last_call[0] >= interval:
-                last_call[0] = now
-                return func(*args, **kwargs)
-        return wrapper
-    return decorator
-
-class Engine:
-    def __init__(self):
-        self.state = GameState()
-    
-    @throttle(60)
-    def tick(self, logic_func: Callable) -> None:
-        logic_func(self.state)
-
-def initialize_environment() -> Engine:
-    return Engine()
-
-if __name__ == '__main__':
-    game = initialize_environment()
-    game.tick(lambda s: print(f'Frame active at {time.time()}'))
+    def process_commands(self, raw_inputs: List[str]) -> List[str]:
+        output_logs = []
+        for raw in raw_inputs:
+            clean = re.sub(r'[^\w\s]', '', raw).strip()
+            if not clean:
+                output_logs.append("skipped empty action")
+                continue
+            tokens = clean.split()
+            verb = tokens[0].upper()
+            rule = self.rules.get(verb)
+            if not rule:
+                output_logs.append(f"failed validation: unknown action '{verb}'")
+                continue
+            if rule.predicate(tokens):
+                output_logs.append(f"processed action {verb} with args {tokens[1:]}")
+            else:
+                output_logs.append(f"failed validation: {rule.error_msg}")
+        return output_logs
