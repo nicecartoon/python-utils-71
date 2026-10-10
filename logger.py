@@ -1,33 +1,31 @@
 import logging
-import sys
-import datetime
+import os
+from logging.handlers import RotatingFileHandler
 
-class GamingLogger:
-    def __init__(self, name='game_engine', level=logging.DEBUG):
-        self.logger = logging.getLogger(name)
-        self.logger.setLevel(level)
-        self.formatter = logging.Formatter('%(asctime)s | %(levelname)s | %(message)s')
-        self._setup_streams()
+def setup_game_logger(name='python-utils-71', log_file='game_state.log', max_bytes=1048576, backup_count=3):
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
 
-    def _setup_streams(self):
-        sh = logging.StreamHandler(sys.stdout)
-        sh.setFormatter(self.formatter)
-        self.logger.addHandler(sh)
+    formatter = logging.Formatter(
+        '%(asctime)s | %(levelname)-8s | %(module)s.%(funcName)s:%(lineno)d | %(message)s'
+    )
 
-    def log_event(self, event_type, message, **kwargs):
-        payload = ' | '.join([f'{k}={v}' for k, v in kwargs.items()])
-        final_msg = f"[{event_type.upper()}] {message} - {payload}"
-        self.logger.info(final_msg)
+    file_handler = RotatingFileHandler(
+        log_file, 
+        maxBytes=max_bytes, 
+        backupCount=backup_count
+    )
+    file_handler.setFormatter(formatter)
+    
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
 
-    def critical_fail(self, context, error):
-        timestamp = datetime.datetime.now().isoformat()
-        with open('crash_dump.log', 'a') as f:
-            f.write(f"{timestamp} | CRASH | {context} | {str(error)}\n")
-        self.logger.critical(f"CRITICAL FAILURE IN {context}: {error}")
+    if not logger.handlers:
+        logger.addHandler(file_handler)
+        logger.addHandler(console_handler)
 
-def get_logger(name='main'):
-    return GamingLogger(name)
+    return logger
 
-def format_ticks(ticks):
-    seconds = ticks / 60
-    return f"{int(seconds // 60)}m {int(seconds % 60)}s"
+if __name__ == '__main__':
+    log = setup_game_logger()
+    log.info('game engine initialization sequence started')
