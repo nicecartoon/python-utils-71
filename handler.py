@@ -1,34 +1,33 @@
 import time
-import collections
-from typing import Dict, Any, Callable
+import random
+from typing import Callable, Any
 
-class GameEventHandler:
-    def __init__(self):
-        self._registry = collections.defaultdict(list)
-        self._history = collections.deque(maxlen=100)
+def frame_rate_throttle(fps: int) -> Callable:
+    def decorator(func: Callable) -> Callable:
+        interval = 1.0 / fps
+        last_call = [0.0]
+        def wrapper(*args, **kwargs) -> Any:
+            elapsed = time.time() - last_call[0]
+            if elapsed < interval:
+                time.sleep(interval - elapsed)
+            last_call[0] = time.time()
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
 
-    def subscribe(self, event_type: str, callback: Callable):
-        self._registry[event_type].append(callback)
+def loot_generator(pool: list, drop_rate: float) -> Any:
+    if random.random() < drop_rate:
+        return random.choice(pool)
+    return None
 
-    def emit(self, event_type: str, payload: Dict[str, Any]):
-        timestamp = time.time()
-        entry = {'type': event_type, 'data': payload, 'time': timestamp}
-        self._history.append(entry)
-        
-        for callback in self._registry.get(event_type, []):
-            try:
-                callback(payload)
-            except Exception as e:
-                print(f'Critical failure in handler {callback}: {e}')
+def bitwise_status_check(flags: int, bit: int) -> bool:
+    return bool(flags & (1 << bit))
 
-    def get_event_stats(self) -> Dict[str, int]:
-        stats = collections.Counter(e['type'] for e in self._history)
-        return dict(stats)
+def lerp_values(start: float, end: float, alpha: float) -> float:
+    return start + (end - start) * max(0.0, min(1.0, alpha))
 
-    def flush_stale_events(self, threshold: float = 3600.0):
-        now = time.time()
-        while self._history and (now - self._history[0]['time']) > threshold:
-            self._history.popleft()
-
-    def __repr__(self):
-        return f'<GameEventHandler registry_size={len(self._registry)}>'
+class EntityPool:
+    def __init__(self, size: int):
+        self.pool = [None] * size
+    def recycle(self, index: int, obj: Any) -> None:
+        self.pool[index % len(self.pool)] = obj
