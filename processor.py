@@ -1,28 +1,48 @@
 import math
-from typing import Any, List, Dict, Callable
+import time
+from typing import Any, Callable, Generator
 
-class GameProcessor:
-    def __init__(self, multiplier: float = 1.0):
-        self.multiplier = multiplier
+VALIDATORS: dict[str, Callable[[dict[str, Any]], bool]] = {
+    "move": lambda p: (
+        isinstance(p.get("x"), (int, float))
+        and isinstance(p.get("y"), (int, float))
+        and math.hypot(p["x"], p["y"]) <= 1000.0
+    ),
+    "cast_spell": lambda p: (
+        isinstance(p.get("spell_id"), int)
+        and 1 <= p["spell_id"] <= 255
+        and isinstance(p.get("mana_cost"), int)
+        and p["mana_cost"] >= 0
+    ),
+    "chat": lambda p: (
+        isinstance(p.get("message"), str)
+        and 0 < len(p["message"]) <= 128
+        and not any(bad in p["message"].lower() for bad in ["<script>", "drop table"])
+    ),
+}
 
-    def apply_damage(self, health: int, damage: int) -> int:
-        return max(0, health - int(damage * self.multiplier))
+def process_input_stream(raw_inputs: list[dict[str, Any]]) -> Generator[dict[str, Any], None, None]:
+    now = time.time()
+    for frame in raw_inputs:
+        match frame:
+            case {"cmd": str(cmd), "payload": dict(payload), "timestamp": float(ts)} if abs(now - ts) <= 5.0:
+                validator = VALIDATORS.get(cmd)
+                if not validator:
+                    continue
+                if not validator(payload):
+                    continue
+                yield {"cmd": cmd, "data": payload, "status": "VALIDATED", "processed_at": now}
+            case {"cmd": str(cmd), "timestamp": ts} if not isinstance(ts, (int, float)):
+                continue
+            case _:
+                continue
 
-    def interpolate(self, start: float, end: float, alpha: float) -> float:
-        return start + (end - start) * max(0.0, min(1.0, alpha))
-
-    def batch_process(self, data: List[Any], func: Callable) -> List[Any]:
-        return [func(item) for item in data]
-
-    def calculate_cooldown(self, base: float, level: int) -> float:
-        return base * (0.9 ** (level - 1))
-
-    def normalize_vector(self, x: float, y: float) -> tuple:
-        mag = math.sqrt(x**2 + y**2)
-        return (x / mag, y / mag) if mag > 0 else (0.0, 0.0)
-
-    def pack_game_state(self, entity_map: Dict[str, Any]) -> str:
-        return '|'.join([f"{k}:{v}" for k, v in entity_map.items()])
-
-    def unpack_game_state(self, packet: str) -> Dict[str, str]:
-        return dict(item.split(':') for item in packet.split('|'))
+if __name__ == "__main__":
+    sample_frames = [
+        {"cmd": "move", "payload": {"x": 10.5, "y": 20.0}, "timestamp": time.time()},
+        {"cmd": "cast_spell", "payload": {"spell_id": 42, "mana_cost": 15}, "timestamp": time.time()},
+        {"cmd": "chat", "payload": {"message": "gg wp!"}, "timestamp": time.time()},
+        {"cmd": "move", "payload": {"x": 99999.0, "y": 0.0}, "timestamp": time.time()},
+    ]
+    results = list(process_input_stream(sample_frames))
+    print(f"Processed {len(results)} valid input frames.")
