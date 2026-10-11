@@ -1,31 +1,39 @@
-import logging
-import os
-from logging.handlers import RotatingFileHandler
+import sys
+import functools
+import traceback
 
-def setup_game_logger(name='python-utils-71', log_file='game_state.log', max_bytes=1048576, backup_count=3):
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
+def robust_log(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            err_id = hex(hash(str(e)))
+            sys.stderr.write(f'[GAMING-CRITICAL] [{err_id}] - {type(e).__name__}: {str(e)}\n')
+            if 'Critical' in type(e).__name__:
+                sys.exit(1)
+            return None
+    return wrapper
 
-    formatter = logging.Formatter(
-        '%(asctime)s | %(levelname)-8s | %(module)s.%(funcName)s:%(lineno)d | %(message)s'
-    )
+class GameLogger:
+    def __init__(self, mode='verbose'):
+        self.mode = mode
 
-    file_handler = RotatingFileHandler(
-        log_file, 
-        maxBytes=max_bytes, 
-        backupCount=backup_count
-    )
-    file_handler.setFormatter(formatter)
-    
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(formatter)
+    @robust_log
+    def log_event(self, msg: str):
+        if not isinstance(msg, str):
+            raise ValueError('Non-string log entry provided')
+        print(f'>> {msg.upper()}')
 
-    if not logger.handlers:
-        logger.addHandler(file_handler)
-        logger.addHandler(console_handler)
-
-    return logger
+    @robust_log
+    def dump_state(self, data: dict):
+        if not data:
+            raise KeyError('State dump requires non-empty data')
+        print(f'Dumping {len(data)} keys to buffer...')
 
 if __name__ == '__main__':
-    log = setup_game_logger()
-    log.info('game engine initialization sequence started')
+    logger = GameLogger()
+    logger.log_event('init_engine')
+    logger.log_event(None)
+    logger.dump_state({})
+    logger.dump_state({'player': 'hero', 'hp': 100})
