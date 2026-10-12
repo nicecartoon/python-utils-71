@@ -1,39 +1,35 @@
-import sys
-import functools
-import traceback
+import logging
+from logging.handlers import RotatingFileHandler
+import os
 
-def robust_log(func):
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        except Exception as e:
-            err_id = hex(hash(str(e)))
-            sys.stderr.write(f'[GAMING-CRITICAL] [{err_id}] - {type(e).__name__}: {str(e)}\n')
-            if 'Critical' in type(e).__name__:
-                sys.exit(1)
-            return None
-    return wrapper
+def setup_gaming_logger(name='game_engine', log_file='game.log', level=logging.DEBUG):
+    logger = logging.getLogger(name)
+    logger.setLevel(level)
+    
+    # ensure logs folder exists to keep workspace tidy
+    log_dir = 'logs'
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+    
+    # rotate logs at 5MB, keeping 3 backups
+    handler = RotatingFileHandler(
+        os.path.join(log_dir, log_file),
+        maxBytes=5*1024*1024,
+        backupCount=3
+    )
+    
+    # custom formatting for better game state visibility
+    formatter = logging.Formatter(
+        '[%(asctime)s] [%(levelname)s] [%(name)s] >> %(message)s',
+        datefmt='%H:%M:%S'
+    )
+    handler.setFormatter(formatter)
+    
+    # avoid duplicate handlers in long-running processes
+    if not logger.handlers:
+        logger.addHandler(handler)
+        
+    return logger
 
-class GameLogger:
-    def __init__(self, mode='verbose'):
-        self.mode = mode
-
-    @robust_log
-    def log_event(self, msg: str):
-        if not isinstance(msg, str):
-            raise ValueError('Non-string log entry provided')
-        print(f'>> {msg.upper()}')
-
-    @robust_log
-    def dump_state(self, data: dict):
-        if not data:
-            raise KeyError('State dump requires non-empty data')
-        print(f'Dumping {len(data)} keys to buffer...')
-
-if __name__ == '__main__':
-    logger = GameLogger()
-    logger.log_event('init_engine')
-    logger.log_event(None)
-    logger.dump_state({})
-    logger.dump_state({'player': 'hero', 'hp': 100})
+# global log instance for the engine
+engine_logger = setup_gaming_logger()
