@@ -2,12 +2,11 @@ import time
 import functools
 import random
 
-def retry_network_ops(retries=3, delay=1.5, backoff=2):
+def retry_network_ops(retries=3, base_delay=1.0, jitter=True):
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             attempt = 0
-            current_delay = delay
             while attempt < retries:
                 try:
                     return func(*args, **kwargs)
@@ -15,16 +14,16 @@ def retry_network_ops(retries=3, delay=1.5, backoff=2):
                     attempt += 1
                     if attempt == retries:
                         raise e
-                    jitter = random.uniform(0, 0.1 * current_delay)
-                    time.sleep(current_delay + jitter)
-                    current_delay *= backoff
+                    delay = base_delay * (2 ** (attempt - 1))
+                    if jitter:
+                        delay += random.uniform(0, 0.1 * delay)
+                    time.sleep(delay)
         return wrapper
     return decorator
 
-class GameNetworkClient:
-    @retry_network_ops(retries=5, delay=1.0)
-    def fetch_leaderboard(self, region):
-        # Simulate unstable gaming infrastructure connectivity
-        if random.random() < 0.7:
-            raise ConnectionError("Server node unreachable")
-        return {"region": region, "top_score": 9999}
+@retry_network_ops(retries=5)
+def sync_game_state(payload):
+    # Simulate network instability for gaming context
+    if random.random() < 0.7:
+        raise ConnectionError("Server lag spike detected")
+    return {"status": "synced", "data": payload}
