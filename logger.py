@@ -2,34 +2,32 @@ import logging
 from logging.handlers import RotatingFileHandler
 import os
 
-def setup_gaming_logger(name='game_engine', log_file='game.log', level=logging.DEBUG):
-    logger = logging.getLogger(name)
-    logger.setLevel(level)
-    
-    # ensure logs folder exists to keep workspace tidy
-    log_dir = 'logs'
+def setup_game_logger(name: str = 'game_engine', log_dir: str = 'logs'):
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
-    
-    # rotate logs at 5MB, keeping 3 backups
+
+    path = os.path.join(log_dir, f'{name}.log')
+    formatter = logging.Formatter('%(asctime)s | %(levelname)-8s | %(message)s')
+
+    # Unusual approach: using a circular buffer of 5MB files
     handler = RotatingFileHandler(
-        os.path.join(log_dir, log_file),
-        maxBytes=5*1024*1024,
-        backupCount=3
-    )
-    
-    # custom formatting for better game state visibility
-    formatter = logging.Formatter(
-        '[%(asctime)s] [%(levelname)s] [%(name)s] >> %(message)s',
-        datefmt='%H:%M:%S'
+        path, 
+        maxBytes=5 * 1024 * 1024, 
+        backupCount=5
     )
     handler.setFormatter(formatter)
+
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
     
-    # avoid duplicate handlers in long-running processes
     if not logger.handlers:
         logger.addHandler(handler)
-        
+        # Add a console stream for real-time debugging during development
+        console = logging.StreamHandler()
+        console.setFormatter(formatter)
+        logger.addHandler(console)
+    
     return logger
 
-# global log instance for the engine
-engine_logger = setup_gaming_logger()
+# Instantiate standard engine logger
+game_logger = setup_game_logger()
