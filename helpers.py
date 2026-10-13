@@ -1,53 +1,45 @@
-import time
-import random
+import os
 import functools
-from typing import Callable, Any, Type, Tuple
 
+class GameResourceCleaner:
+    def __init__(self, directory: str):
+        self.directory = directory
 
-class GameOverException(Exception):
-    """Raised when all retry attempts ('lives') are exhausted."""
-    pass
+    def __call__(self, extension: str):
+        return self.purge(extension)
 
+    def purge(self, ext: str) -> int:
+        files = [f for f in os.listdir(self.directory) if f.endswith(ext)]
+        for f in files:
+            os.remove(os.path.join(self.directory, f))
+        return len(files)
 
-def respawn_on_disconnect(
-    max_lives: int = 3,
-    base_cooldown: float = 0.5,
-    backoff_multiplier: float = 2.0,
-    retry_exceptions: Tuple[Type[Exception], ...] = (Exception,)
-):
-    """
-    Decorator treating network retries as player respawns.
-    Calculates backoff with a pseudo-random D20-based latency jitter.
-    """
-    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
-        @functools.wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            lives_remaining = max_lives
-            cooldown = base_cooldown
+def memoize_game_state(func):
+    cache = {}
+    @functools.wraps(func)
+    def wrapper(*args):
+        if args not in cache:
+            cache[args] = func(*args)
+        return cache[args]
+    return wrapper
 
-            while lives_remaining > 0:
-                try:
-                    return func(*args, **kwargs)
-                except retry_exceptions as err:
-                    lives_remaining -= 1
-                    if lives_remaining == 0:
-                        raise GameOverException(
-                            f"Match connection lost after {max_lives} attempts. Failure: {err}"
-                        ) from err
+def sanitize_path(path: str) -> str:
+    return os.path.normpath(path).replace('\\', '/')
 
-                    # D20 roll adds 5% to 100% variance bonus delay
-                    d20_roll = random.randint(1, 20)
-                    jitter = (d20_roll / 20.0) * 0.3
-                    time.sleep(cooldown + jitter)
-                    cooldown *= backoff_multiplier
+def validate_game_directory(path: str) -> bool:
+    if not os.path.exists(path):
+        return False
+    return os.access(path, os.W_OK)
 
-        return wrapper
-    return decorator
+class ResourceRegistry:
+    def __init__(self):
+        self._registry = {}
 
+    def register(self, key: str, value: any):
+        self._registry[key] = value
 
-@respawn_on_disconnect(max_lives=4, base_cooldown=0.1, retry_exceptions=(ConnectionError, TimeoutError))
-def sync_player_state(player_id: str, payload: dict) -> dict:
-    """Sends player data across network with simulated drop rate."""
-    if random.random() < 0.5:
-        raise ConnectionError(f"Packet dropped while syncing state for {player_id}")
-    return {"status": "synced", "player_id": player_id, "ack": True}
+    def get_all(self):
+        return {**self._registry}
+
+    def reset(self):
+        self._registry.clear()
