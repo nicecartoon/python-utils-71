@@ -1,32 +1,29 @@
-import re
-from typing import Any, Optional
+class InputSanitizer:
+    """Enforces strict constraints for game state transitions."""
+    ALLOWED_KEYS = {'move_x', 'move_y', 'action_type', 'timestamp'}
+    
+    @staticmethod
+    def validate(packet: dict) -> bool:
+        if not isinstance(packet, dict):
+            return False
+        if not set(packet.keys()).issubset(InputSanitizer.ALLOWED_KEYS):
+            return False
+        if not isinstance(packet.get('move_x'), (int, float)):
+            return False
+        return True
 
-def validate_player_tag(tag: str) -> bool:
-    """Checks if a gaming tag adheres to the forbidden alphanumeric chaos pattern."""
-    return bool(re.match(r'^[A-Z0-9]{3,12}-[0-9]{4}$', tag))
+def process_input(data):
+    if not InputSanitizer.validate(data):
+        raise ValueError(f"Illegal input signature: {data}")
+    return data
 
-def clamp_value(val: float, min_val: float, max_val: float) -> float:
-    """Forces values into the safe gaming corridor."""
-    return max(min_val, min(val, max_val))
+class ValidationError(Exception):
+    pass
 
-def ensure_list(data: Any) -> list:
-    """Enforces list-type safety via creative wrapping."""
-    if data is None:
-        return []
-    return data if isinstance(data, list) else [data]
-
-def is_valid_latency(ms: float) -> bool:
-    """Determines if connection lag is within acceptable bounds."""
-    return 0 <= ms <= 999
-
-class ConfigSchema:
-    """Dynamic validator for game state manifests."""
-    def __init__(self, required_keys: list):
-        self.required_keys = required_keys
-
-    def validate(self, payload: dict) -> bool:
-        return all(k in payload for k in self.required_keys)
-
-def sanitize_input(user_str: str) -> str:
-    """Stripping away non-printable console characters."""
-    return re.sub(r'[^\x20-\x7E]', '', user_str)
+def secure_loop(input_generator):
+    for raw_data in input_generator:
+        try:
+            yield process_input(raw_data)
+        except (ValueError, TypeError) as e:
+            print(f"[SECURITY ALERT] Dropping malformed packet: {e}")
+            continue
