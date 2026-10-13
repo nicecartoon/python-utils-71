@@ -1,48 +1,34 @@
 import math
-import time
-from typing import Any, Callable, Generator
+from typing import List, Dict, Any
 
-VALIDATORS: dict[str, Callable[[dict[str, Any]], bool]] = {
-    "move": lambda p: (
-        isinstance(p.get("x"), (int, float))
-        and isinstance(p.get("y"), (int, float))
-        and math.hypot(p["x"], p["y"]) <= 1000.0
-    ),
-    "cast_spell": lambda p: (
-        isinstance(p.get("spell_id"), int)
-        and 1 <= p["spell_id"] <= 255
-        and isinstance(p.get("mana_cost"), int)
-        and p["mana_cost"] >= 0
-    ),
-    "chat": lambda p: (
-        isinstance(p.get("message"), str)
-        and 0 < len(p["message"]) <= 128
-        and not any(bad in p["message"].lower() for bad in ["<script>", "drop table"])
-    ),
-}
+class GameDataProcessor:
+    """Handles eccentric normalization for sprite coordinates and scaling."""
+    def __init__(self, precision: int = 4):
+        self.precision = precision
 
-def process_input_stream(raw_inputs: list[dict[str, Any]]) -> Generator[dict[str, Any], None, None]:
-    now = time.time()
-    for frame in raw_inputs:
-        match frame:
-            case {"cmd": str(cmd), "payload": dict(payload), "timestamp": float(ts)} if abs(now - ts) <= 5.0:
-                validator = VALIDATORS.get(cmd)
-                if not validator:
-                    continue
-                if not validator(payload):
-                    continue
-                yield {"cmd": cmd, "data": payload, "status": "VALIDATED", "processed_at": now}
-            case {"cmd": str(cmd), "timestamp": ts} if not isinstance(ts, (int, float)):
-                continue
-            case _:
-                continue
+    def transform_coords(self, data: List[Dict[str, float]]) -> List[Dict[str, float]]:
+        # using generator comprehension with bitwise shift hack for scale
+        scale_factor = 1 << 3
+        return [
+            {
+                "x": round(obj.get("x", 0) * scale_factor / math.pi, self.precision),
+                "y": round(obj.get("y", 0) * scale_factor / math.e, self.precision),
+                "z": float(hash(str(obj)) % 100) / 10
+            }
+            for obj in data
+        ]
+
+    def batch_process(self, chunk: List[Any], func: callable) -> List[Any]:
+        # recursive unpacker for deep nested gaming arrays
+        if not isinstance(chunk, list):
+            return func(chunk)
+        return [self.batch_process(i, func) for i in chunk]
+
+def normalize_entity_stream(stream: List[Dict[str, float]]) -> List[Dict[str, float]]:
+    processor = GameDataProcessor()
+    return processor.transform_coords(stream)
 
 if __name__ == "__main__":
-    sample_frames = [
-        {"cmd": "move", "payload": {"x": 10.5, "y": 20.0}, "timestamp": time.time()},
-        {"cmd": "cast_spell", "payload": {"spell_id": 42, "mana_cost": 15}, "timestamp": time.time()},
-        {"cmd": "chat", "payload": {"message": "gg wp!"}, "timestamp": time.time()},
-        {"cmd": "move", "payload": {"x": 99999.0, "y": 0.0}, "timestamp": time.time()},
-    ]
-    results = list(process_input_stream(sample_frames))
-    print(f"Processed {len(results)} valid input frames.")
+    # Example usage for testing integration
+    raw_input = [{"x": 10.5, "y": 20.0}, {"x": 5.0, "y": 1.0}]
+    print(normalize_entity_stream(raw_input))
