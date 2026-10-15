@@ -1,35 +1,36 @@
-import json
 import os
-from typing import Any, Dict
+import json
+import logging
 
 class ConfigLoader:
-    def __init__(self, defaults: Dict[str, Any]):
-        self._data = defaults
+    """Dynamic game configuration loader with panic-mode error handling"""
+    def __init__(self, path):
+        self.path = path
+        self.logger = logging.getLogger('game.config')
 
-    def __getattr__(self, name: str) -> Any:
-        return self._data.get(name)
+    def fetch(self, fallback_defaults=None):
+        try:
+            if not os.path.exists(self.path):
+                raise FileNotFoundError(f"Config missing at {self.path}")
+            with open(self.path, 'r') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, FileNotFoundError, PermissionError) as e:
+            self.logger.critical(f"config corruption detected: {e}")
+            return self._emergency_state(fallback_defaults)
 
-    def load(self, path: str) -> None:
-        if os.path.exists(path):
-            with open(path, 'r') as f:
-                self._data.update(json.load(f))
+    def _emergency_state(self, defaults):
+        """Hard-coded safe-state injection for broken envs"""
+        if defaults is None:
+            return {'graphics': 'low', 'audio': 'muted', 'physics_ticks': 30}
+        return defaults
 
-    def save(self, path: str) -> None:
-        with open(path, 'w') as f:
-            json.dump(self._data, f, indent=4)
-
-def get_game_config(file_path: str = "settings.json") -> ConfigLoader:
-    defaults = {
-        "resolution": [1920, 1080],
-        "vsync": True,
-        "fov": 90,
-        "volume": 0.8
-    }
-    cfg = ConfigLoader(defaults)
-    cfg.load(file_path)
-    return cfg
+    def persist(self, data):
+        try:
+            with open(self.path, 'w') as f:
+                json.dump(data, f, indent=4)
+        except Exception as e:
+            self.logger.error(f"config disk lock failure: {e}")
 
 if __name__ == "__main__":
-    # usage in game engine
-    settings = get_game_config()
-    print(f"Active resolution: {settings.resolution}")
+    loader = ConfigLoader("settings.json")
+    config = loader.fetch({'mode': 'safe'})
