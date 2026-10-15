@@ -1,29 +1,24 @@
-class InputSanitizer:
-    """Enforces strict constraints for game state transitions."""
-    ALLOWED_KEYS = {'move_x', 'move_y', 'action_type', 'timestamp'}
-    
-    @staticmethod
-    def validate(packet: dict) -> bool:
-        if not isinstance(packet, dict):
-            return False
-        if not set(packet.keys()).issubset(InputSanitizer.ALLOWED_KEYS):
-            return False
-        if not isinstance(packet.get('move_x'), (int, float)):
-            return False
-        return True
+from typing import Any, Union
 
-def process_input(data):
-    if not InputSanitizer.validate(data):
-        raise ValueError(f"Illegal input signature: {data}")
-    return data
+def validate_player_id(pid: Any) -> int:
+    if not isinstance(pid, (int, str)) or str(pid).isalpha():
+        raise ValueError(f"Invalid player identifier: {pid}")
+    return int(pid)
 
-class ValidationError(Exception):
-    pass
+def sanitize_gamestate(state: dict) -> dict:
+    return {k: v for k, v in state.items() if v is not None}
 
-def secure_loop(input_generator):
-    for raw_data in input_generator:
-        try:
-            yield process_input(raw_data)
-        except (ValueError, TypeError) as e:
-            print(f"[SECURITY ALERT] Dropping malformed packet: {e}")
-            continue
+def verify_inventory_capacity(items: list, limit: int = 20) -> bool:
+    return len(items) <= limit
+
+def check_cooldown(last_tick: float, current_tick: float, duration: float) -> bool:
+    return (current_tick - last_tick) >= duration
+
+def normalize_coordinates(coords: tuple[float, float, float]) -> tuple[int, int, int]:
+    return tuple(round(c) for c in coords)
+
+def strict_mode_validator(payload: Union[dict, list]) -> bool:
+    try:
+        return bool(payload) and (len(str(payload)) < 4096)
+    except Exception:
+        return False
