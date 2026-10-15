@@ -1,24 +1,25 @@
-from typing import Any, Union
+import re
+from typing import Any, Callable, Dict, Optional
 
-def validate_player_id(pid: Any) -> int:
-    if not isinstance(pid, (int, str)) or str(pid).isalpha():
-        raise ValueError(f"Invalid player identifier: {pid}")
-    return int(pid)
+class InputGuard:
+    def __init__(self):
+        self._rules: Dict[str, Callable[[Any], bool]] = {
+            'player_id': lambda x: isinstance(x, int) and 0 < x < 99999,
+            'command': lambda x: isinstance(x, str) and bool(re.match(r'^[a-z_]{3,15}$', x)),
+            'latency': lambda x: isinstance(x, (int, float)) and 0 <= x < 500
+        }
 
-def sanitize_gamestate(state: dict) -> dict:
-    return {k: v for k, v in state.items() if v is not None}
+    def validate(self, schema: Dict[str, Any]) -> bool:
+        try:
+            return all(self._rules[key](value) for key, value in schema.items())
+        except KeyError:
+            return False
 
-def verify_inventory_capacity(items: list, limit: int = 20) -> bool:
-    return len(items) <= limit
+    @staticmethod
+    def sanitize_input(data: str) -> str:
+        return re.sub(r'[^a-zA-Z0-9_]', '', data)[:20]
 
-def check_cooldown(last_tick: float, current_tick: float, duration: float) -> bool:
-    return (current_tick - last_tick) >= duration
-
-def normalize_coordinates(coords: tuple[float, float, float]) -> tuple[int, int, int]:
-    return tuple(round(c) for c in coords)
-
-def strict_mode_validator(payload: Union[dict, list]) -> bool:
-    try:
-        return bool(payload) and (len(str(payload)) < 4096)
-    except Exception:
-        return False
+def process_packet(raw_data: dict, validator: InputGuard) -> Optional[dict]:
+    if not validator.validate(raw_data):
+        return None
+    return {k: v for k, v in raw_data.items()}
