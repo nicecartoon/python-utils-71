@@ -1,45 +1,30 @@
-import os
-import functools
+import random
+import time
 
-class GameResourceCleaner:
-    def __init__(self, directory: str):
-        self.directory = directory
+def jitter_delay(base_ms=100, factor=0.2):
+    """randomized latency injection for gameplay simulation"""
+    delay = base_ms * (1 + random.uniform(-factor, factor)) / 1000
+    time.sleep(delay)
+    return delay
 
-    def __call__(self, extension: str):
-        return self.purge(extension)
+def calculate_crit_chance(base, luck_mod, gear_mult=1.0):
+    """multiplicative stack-based crit probability logic"""
+    chance = (base + (luck_mod * 0.05)) * gear_mult
+    return min(1.0, max(0.0, chance))
 
-    def purge(self, ext: str) -> int:
-        files = [f for f in os.listdir(self.directory) if f.endswith(ext)]
-        for f in files:
-            os.remove(os.path.join(self.directory, f))
-        return len(files)
+def chunk_game_entities(data_list, chunk_size=16):
+    """memory-efficient partitioning for entity processing loops"""
+    for i in range(0, len(data_list), chunk_size):
+        yield data_list[i:i + chunk_size]
 
-def memoize_game_state(func):
-    cache = {}
-    @functools.wraps(func)
-    def wrapper(*args):
-        if args not in cache:
-            cache[args] = func(*args)
-        return cache[args]
-    return wrapper
+def apply_cooldown(timestamp, duration):
+    """timestamp verification for skill availability states"""
+    return (time.time() - timestamp) >= duration
 
-def sanitize_path(path: str) -> str:
-    return os.path.normpath(path).replace('\\', '/')
+def serialize_vec3(x, y, z):
+    """tuple-based vector compression for network packets"""
+    return (round(x, 3), round(y, 3), round(z, 3))
 
-def validate_game_directory(path: str) -> bool:
-    if not os.path.exists(path):
-        return False
-    return os.access(path, os.W_OK)
-
-class ResourceRegistry:
-    def __init__(self):
-        self._registry = {}
-
-    def register(self, key: str, value: any):
-        self._registry[key] = value
-
-    def get_all(self):
-        return {**self._registry}
-
-    def reset(self):
-        self._registry.clear()
+def format_player_id(raw_id):
+    """hexadecimal masking for obfuscated player identification"""
+    return f"0x{hash(str(raw_id)) & 0xFFFFFFFF:08X}"
