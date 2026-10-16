@@ -2,32 +2,31 @@ import logging
 from logging.handlers import RotatingFileHandler
 import os
 
-def setup_game_logger(name: str = 'game_engine', log_dir: str = 'logs'):
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
-
-    path = os.path.join(log_dir, f'{name}.log')
-    formatter = logging.Formatter('%(asctime)s | %(levelname)-8s | %(message)s')
-
-    # Unusual approach: using a circular buffer of 5MB files
-    handler = RotatingFileHandler(
-        path, 
-        maxBytes=5 * 1024 * 1024, 
-        backupCount=5
-    )
-    handler.setFormatter(formatter)
-
+def setup_game_logger(name: str = 'python-utils-71', log_file: str = 'game_engine.log'):
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)
     
-    if not logger.handlers:
-        logger.addHandler(handler)
-        # Add a console stream for real-time debugging during development
-        console = logging.StreamHandler()
-        console.setFormatter(formatter)
-        logger.addHandler(console)
+    formatter = logging.Formatter(
+        '[%(asctime)s] {%(levelname)s} (%(module)s) -> %(message)s',
+        datefmt='%H:%M:%S'
+    )
+
+    file_handler = RotatingFileHandler(
+        log_file, 
+        maxBytes=1024 * 1024 * 5, 
+        backupCount=3
+    )
+    file_handler.setFormatter(formatter)
+    
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
     
     return logger
 
-# Instantiate standard engine logger
-game_logger = setup_game_logger()
+if __name__ == '__main__':
+    # Example usage for gaming engine debug trace
+    game_log = setup_game_logger()
+    game_log.info('Engine core initialized - ready for player input')
