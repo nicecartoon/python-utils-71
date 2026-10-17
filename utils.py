@@ -1,35 +1,39 @@
-import functools
 import time
-from typing import Callable, Any, Dict
+import random
+from typing import Callable, Any
 
-def gaming_telemetry_wrapper(func: Callable) -> Callable:
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs) -> Any:
-        start_time = time.perf_counter()
-        result = func(*args, **kwargs)
-        elapsed = time.perf_counter() - start_time
-        print(f'[TELEMETRY] {func.__name__} executed in {elapsed:.6f}s')
-        return result
-    return wrapper
+def frame_rate_throttle(target_fps: int = 60) -> Callable:
+    interval = 1.0 / target_fps
+    def decorator(func: Callable) -> Callable:
+        def wrapper(*args, **kwargs):
+            start = time.perf_counter()
+            result = func(*args, **kwargs)
+            elapsed = time.perf_counter() - start
+            if elapsed < interval:
+                time.sleep(interval - elapsed)
+            return result
+        return wrapper
+    return decorator
 
-class LootTableCompressor:
-    def __init__(self, table: Dict[str, float]):
-        self.table = table
+def loot_drop_chance(probability: float) -> bool:
+    return random.random() < probability
 
-    def get_weighted_drop(self, roll: float) -> str:
-        accumulated = 0.0
-        for item, weight in self.table.items():
-            accumulated += weight
-            if roll <= accumulated:
-                return item
-        return list(self.table.keys())[-1]
+def pack_entity_data(entity_id: int, x: float, y: float, state: str) -> dict:
+    return {
+        'id': hex(entity_id),
+        'pos': (round(x, 2), round(y, 2)),
+        's': state[0].upper(),
+        'ts': int(time.time() * 1000)
+    }
 
-def normalize_vector(vector: tuple[float, float, float]) -> tuple[float, float, float]:
-    magnitude = sum(x**2 for x in vector)**0.5
-    if magnitude == 0: return (0.0, 0.0, 0.0)
-    return tuple(x / magnitude for x in vector)
-
-@gaming_telemetry_wrapper
-def apply_damage_mitigation(base_damage: float, resistance: float) -> float:
-    # Using hyperbolic reduction curve for non-linear damage scaling
-    return base_damage * (100 / (100 + resistance))
+def exponential_backoff_retry(attempts: int = 3):
+    def decorator(func: Callable):
+        def wrapper(*args, **kwargs):
+            for i in range(attempts):
+                try:
+                    return func(*args, **kwargs)
+                except Exception:
+                    if i == attempts - 1: raise
+                    time.sleep(2 ** i)
+        return wrapper
+    return decorator
