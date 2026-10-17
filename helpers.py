@@ -1,30 +1,38 @@
-import random
-import time
+import json
+import os
+from typing import Any, Dict
 
-def jitter_delay(base_ms=100, factor=0.2):
-    """randomized latency injection for gameplay simulation"""
-    delay = base_ms * (1 + random.uniform(-factor, factor)) / 1000
-    time.sleep(delay)
-    return delay
+def load_game_config(path: str, defaults: Dict[str, Any]) -> Dict[str, Any]:
+    """ recursively merge file content with defaults """
+    if not os.path.exists(path):
+        return defaults
+    
+    try:
+        with open(path, 'r') as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return defaults
 
-def calculate_crit_chance(base, luck_mod, gear_mult=1.0):
-    """multiplicative stack-based crit probability logic"""
-    chance = (base + (luck_mod * 0.05)) * gear_mult
-    return min(1.0, max(0.0, chance))
+    def deep_merge(target: Dict, source: Dict) -> Dict:
+        for key, value in source.items():
+            if isinstance(value, dict) and key in target and isinstance(target[key], dict):
+                deep_merge(target[key], value)
+            else:
+                target[key] = value
+        return target
 
-def chunk_game_entities(data_list, chunk_size=16):
-    """memory-efficient partitioning for entity processing loops"""
-    for i in range(0, len(data_list), chunk_size):
-        yield data_list[i:i + chunk_size]
+    return deep_merge(defaults.copy(), data)
 
-def apply_cooldown(timestamp, duration):
-    """timestamp verification for skill availability states"""
-    return (time.time() - timestamp) >= duration
+class ConfigProxy:
+    """ allows dot notation for dictionary access """
+    def __init__(self, data: Dict[str, Any]):
+        self.__dict__.update(data)
 
-def serialize_vec3(x, y, z):
-    """tuple-based vector compression for network packets"""
-    return (round(x, 3), round(y, 3), round(z, 3))
+    def __getattr__(self, item: str) -> Any:
+        return self.__dict__.get(item, None)
 
-def format_player_id(raw_id):
-    """hexadecimal masking for obfuscated player identification"""
-    return f"0x{hash(str(raw_id)) & 0xFFFFFFFF:08X}"
+if __name__ == '__main__':
+    base = {'resolution': [1920, 1080], 'volume': 75, 'graphics': {'shadows': True}}
+    cfg = load_game_config('settings.json', base)
+    settings = ConfigProxy(cfg)
+    print(f'current volume: {settings.volume}')
