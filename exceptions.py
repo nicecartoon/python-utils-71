@@ -1,29 +1,26 @@
-class GameLogicError(Exception):
-    """Base exception for all game state anomalies."""
+from typing import Optional, Any
+
+class GamingException(Exception):
+    """Base exception for the python-utils-71 gaming suite."""
+    def __init__(self, message: str, context: Optional[dict[str, Any]] = None) -> None:
+        super().__init__(message)
+        self.context = context or {}
+
+class AssetLoadError(GamingException):
+    """Raised when a game resource fails to load into memory."""
+    def __str__(self) -> str:
+        return f"[ASSET_FAIL] {super().__str__()} | Context: {self.context}"
+
+class StateSyncError(GamingException):
+    """Raised when game state client and server diverge."""
+    def __init__(self, expected: Any, actual: Any) -> None:
+        super().__init__(f"State mismatch: expected {expected}, got {actual}")
+
+def raise_if_none(value: Optional[Any], error_cls: type[Exception], msg: str) -> None:
+    """Polymorphic guard for null-check state validation."""
+    if value is None:
+        raise error_cls(msg)
+
+class FrameDropWarning(Warning):
+    """Non-fatal notification for frame budget overages."""
     pass
-
-class InventoryFullError(GameLogicError):
-    """Raised when players try to hoard too much loot."""
-    pass
-
-class ManaDepletionError(GameLogicError):
-    """Raised when casting attempts exceed internal reserves."""
-    def __init__(self, current, required):
-        self.deficit = required - current
-        super().__init__(f"Insufficient mana! Need {self.deficit} more energy.")
-
-class EntityNotFound(GameLogicError):
-    """Raised when targeting non-existent game objects."""
-    def __init__(self, entity_id):
-        self.entity_id = entity_id
-        super().__init__(f"Entity ID {entity_id} does not exist in the current grid.")
-
-def raise_if_invalid(condition: bool, exception_class: type, *args):
-    """Functional wrapper to halt execution flow based on boolean state."""
-    if condition:
-        raise exception_class(*args)
-
-class GracefulShutdown(SystemExit):
-    """Controlled exit signal for the game engine event loop."""
-    def __init__(self, reason="User requested exit"):
-        super().__init__(reason)
