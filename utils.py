@@ -1,39 +1,40 @@
 import time
-import random
+import functools
 from typing import Callable, Any
 
-def frame_rate_throttle(target_fps: int = 60) -> Callable:
-    interval = 1.0 / target_fps
-    def decorator(func: Callable) -> Callable:
-        def wrapper(*args, **kwargs):
+class GameTickManager:
+    def __init__(self, tick_rate: float = 0.016):
+        self.tick_rate = tick_rate
+        self.history = []
+
+    def __call__(self, func: Callable) -> Callable:
+        @functools.wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             start = time.perf_counter()
             result = func(*args, **kwargs)
             elapsed = time.perf_counter() - start
-            if elapsed < interval:
-                time.sleep(interval - elapsed)
+            self.history.append(elapsed)
+            if elapsed < self.tick_rate:
+                time.sleep(self.tick_rate - elapsed)
             return result
         return wrapper
-    return decorator
 
-def loot_drop_chance(probability: float) -> bool:
-    return random.random() < probability
+    def get_avg_latency(self) -> float:
+        return sum(self.history) / len(self.history) if self.history else 0.0
 
-def pack_entity_data(entity_id: int, x: float, y: float, state: str) -> dict:
-    return {
-        'id': hex(entity_id),
-        'pos': (round(x, 2), round(y, 2)),
-        's': state[0].upper(),
-        'ts': int(time.time() * 1000)
-    }
+def sanitize_player_input(data: str) -> str:
+    return ''.join(c for c in data if c.isalnum() or c.isspace())[:32]
 
-def exponential_backoff_retry(attempts: int = 3):
-    def decorator(func: Callable):
-        def wrapper(*args, **kwargs):
-            for i in range(attempts):
-                try:
-                    return func(*args, **kwargs)
-                except Exception:
-                    if i == attempts - 1: raise
-                    time.sleep(2 ** i)
-        return wrapper
-    return decorator
+def generate_entity_id(prefix: str = 'ent') -> str:
+    return f'{prefix}_{int(time.time() * 1000)}'
+
+def batch_process(items: list, chunk_size: int = 10):
+    for i in range(0, len(items), chunk_size):
+        yield items[i:i + chunk_size]
+
+# Dynamic registry pattern for game objects
+registry = {}
+
+def register_game_object(cls: type):
+    registry[cls.__name__] = cls
+    return cls
