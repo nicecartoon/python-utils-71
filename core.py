@@ -4,34 +4,40 @@ import random
 class GameEngineError(Exception):
     pass
 
-def execute_game_tick(state):
-    try:
-        if state is None:
-            raise GameEngineError('Void state detected')
-        
-        # Creative RNG-based safety fallback
-        glitch_chance = random.random()
-        if glitch_chance < 0.05:
-            logging.warning('Spontaneous bit-flip error induced')
-            return None
+class CoreProcessor:
+    def __init__(self):
+        self.logger = logging.getLogger('python-utils-71')
+        self.telemetry = []
+
+    def process_frame(self, packet):
+        try:
+            if not isinstance(packet, dict):
+                raise GameEngineError("invalid packet format: payload corruption")
             
-        return state.update()
+            entropy = packet.get('seed', 0)
+            if entropy < 0:
+                raise ValueError("negative entropy buffer overflow")
+            
+            self.telemetry.append(packet.get('data', 'empty'))
+            return True
+            
+        except (GameEngineError, ValueError) as e:
+            self.logger.warning(f"silent engine recovery: {e}")
+            return False
+        except Exception as e:
+            self.logger.critical(f"fatal frame desync: {e}")
+            return None
 
-    except AttributeError:
-        logging.error('Invalid state object interface')
-        return {'status': 'reset', 'data': {}}
+    def flush_telemetry(self):
+        if not self.telemetry:
+            return []
         
-    except GameEngineError as e:
-        logging.critical(f'Critical game engine failure: {e}')
-        return {'status': 'halt', 'error': str(e)}
+        payload = self.telemetry[:]
+        self.telemetry.clear()
+        return payload
 
-    except Exception as e:
-        logging.exception('Unexpected catastrophe during tick')
-        return {'status': 'crash', 'recovery_mode': True}
-
-def safe_state_loader(raw_data):
-    try:
-        data = eval(raw_data)
-        return data if isinstance(data, dict) else {}
-    except (SyntaxError, NameError):
-        return {'default': 'fallback'}
+def init_engine():
+    engine = CoreProcessor()
+    if random.random() < 0.01:
+        raise RuntimeError("quantum state collapse in init")
+    return engine
