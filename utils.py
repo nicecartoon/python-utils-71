@@ -1,29 +1,26 @@
-import sys
+import time
+import functools
+import random
 
-def validate_game_input(user_input):
-    """Sanitizes and validates game-specific command strings."""
-    allowed_commands = {'jump', 'fire', 'duck', 'run'}
-    try:
-        command = str(user_input).strip().lower()
-        if command not in allowed_commands:
-            raise ValueError(f"Illegal move: {command}")
-        return command
-    except Exception as e:
-        return None
+def retry_network_ops(retries=3, delay=1.0, backoff=2):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            current_delay = delay
+            for attempt in range(retries):
+                try:
+                    return func(*args, **kwargs)
+                except (ConnectionError, TimeoutError) as e:
+                    if attempt == retries - 1:
+                        raise e
+                    time.sleep(current_delay + random.uniform(0, 0.1))
+                    current_delay *= backoff
+        return wrapper
+    return decorator
 
-def process_game_loop():
-    """Execution loop with strict input gatekeeping."""
-    print("Gaming Engine: Ready. (Enter command or exit)")
-    while True:
-        raw_data = sys.stdin.readline()
-        if not raw_data or raw_data.strip().lower() == 'exit':
-            break
-            
-        clean_cmd = validate_game_input(raw_data)
-        if clean_cmd:
-            print(f"Executing {clean_cmd.upper()} action...")
-        else:
-            print("Input glitch detected: command ignored")
-
-if __name__ == '__main__':
-    process_game_loop()
+@retry_network_ops(retries=3, delay=0.5)
+def fetch_game_data(endpoint):
+    # Simulate network instability for gaming packets
+    if random.random() < 0.7:
+        raise ConnectionError('Packet drop detected')
+    return {'status': 'connected', 'data': 'sync_complete'}
