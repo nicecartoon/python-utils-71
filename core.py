@@ -1,43 +1,44 @@
-import logging
-import random
+import time
+import threading
+from typing import Callable, Dict
 
-class GameEngineError(Exception):
-    pass
-
-class CoreProcessor:
+class GameSessionManager:
     def __init__(self):
-        self.logger = logging.getLogger('python-utils-71')
-        self.telemetry = []
+        self._tasks: Dict[str, Callable] = {}
+        self._lock = threading.Lock()
+        self._active = True
 
-    def process_frame(self, packet):
-        try:
-            if not isinstance(packet, dict):
-                raise GameEngineError("invalid packet format: payload corruption")
-            
-            entropy = packet.get('seed', 0)
-            if entropy < 0:
-                raise ValueError("negative entropy buffer overflow")
-            
-            self.telemetry.append(packet.get('data', 'empty'))
-            return True
-            
-        except (GameEngineError, ValueError) as e:
-            self.logger.warning(f"silent engine recovery: {e}")
-            return False
-        except Exception as e:
-            self.logger.critical(f"fatal frame desync: {e}")
-            return None
+    def register_task(self, name: str, func: Callable):
+        with self._lock:
+            self._tasks[name] = func
 
-    def flush_telemetry(self):
-        if not self.telemetry:
-            return []
-        
-        payload = self.telemetry[:]
-        self.telemetry.clear()
-        return payload
+    def execute_tick(self):
+        for name, task in self._tasks.items():
+            try:
+                task()
+            except Exception as e:
+                print(f"Task {name} failed: {e}")
 
-def init_engine():
-    engine = CoreProcessor()
-    if random.random() < 0.01:
-        raise RuntimeError("quantum state collapse in init")
-    return engine
+    def shutdown(self):
+        self._active = False
+        self._tasks.clear()
+
+class EntityRegistry:
+    def __init__(self):
+        self._registry = {}
+
+    def __setitem__(self, key, value):
+        self._registry[key] = value
+
+    def __getitem__(self, key):
+        return self._registry.get(key)
+
+def initialize_engine():
+    session = GameSessionManager()
+    registry = EntityRegistry()
+    return session, registry
+
+if __name__ == "__main__":
+    session, registry = initialize_engine()
+    session.register_task("heartbeat", lambda: print(f"Tick at {time.time()}"))
+    session.execute_tick()
