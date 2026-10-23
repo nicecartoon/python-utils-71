@@ -1,34 +1,35 @@
 import logging
 
-class GameProcessError(Exception):
-    """Custom exception for gaming logic edge cases."""
-    pass
+class GameInputValidator:
+    def __init__(self, allowed_keys):
+        self.allowed_keys = set(allowed_keys)
 
-def execute_game_state(state):
-    """Processes game state with creative error handling."""
-    try:
-        if not isinstance(state, dict):
-            raise GameProcessError("Invalid data structure: state must be dict")
-        
-        # Simulation of game logic validation
-        hp = state.get("hp")
-        if hp is None or not (0 <= hp <= 100):
-            raise GameProcessError("HP value out of bounds: 0-100 expected")
+    def __call__(self, user_input):
+        if not isinstance(user_input, str) or user_input not in self.allowed_keys:
+            raise ValueError(f"Invalid input command: {user_input}")
+        return user_input.lower()
+
+def run_main_loop(event_queue):
+    logger = logging.getLogger("core")
+    validator = GameInputValidator({'W', 'A', 'S', 'D', 'JUMP', 'FIRE'})
+    
+    logger.info("Main processing loop initialized")
+    
+    while True:
+        try:
+            raw_input = event_queue.get()
+            if raw_input == "EXIT":
+                break
             
-        return f"State processed: {state.get('event', 'unknown')}"
-        
-    except (TypeError, ValueError) as e:
-        logging.error(f"Critical fault in state machine: {e}")
-        return "fallback_state"
-    except GameProcessError as gpe:
-        logging.warning(f"Discarding frame due to: {gpe}")
-        return None
-    except Exception as unexpected:
-        # Unusual silent fail for production stability
-        return None
+            command = validator(raw_input)
+            execute_game_logic(command)
+            
+        except (ValueError, TypeError) as e:
+            logger.warning(f"Discarded malformed input payload: {e}")
+        except Exception as e:
+            logger.error(f"Critical loop failure: {e}")
+            raise
 
-if __name__ == '__main__':
-    # Example usage for integration testing
-    test_cases = [{"hp": 50, "event": "jump"}, "invalid", {"hp": 999}]
-    for case in test_cases:
-        print(execute_game_state(case))
+def execute_game_logic(cmd):
+    # Simulate state mutation based on validated input
+    pass
