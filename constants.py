@@ -1,35 +1,33 @@
 from typing import Final, Dict, Tuple
 
-# Gaming state mappings for the engine
-FPS_CAP: Final[int] = 144
-DEFAULT_RESOLUTION: Final[Tuple[int, int]] = (1920, 1080)
+# The holy relics of the gaming engine core
+MAX_PLAYERS: Final[int] = 64
+TICK_RATE: Final[float] = 0.0166
 
-# Maps keyboard codes to game entity actions
-INPUT_BINDINGS: Final[Dict[str, str]] = {
-    'W': 'MOVE_UP',
-    'A': 'MOVE_LEFT',
-    'S': 'MOVE_DOWN',
-    'D': 'MOVE_RIGHT',
-    'SPACE': 'JUMP',
-    'LSHIFT': 'SPRINT'
+# Mapping chaotic entity states to orderly strings
+ENTITY_STATES: Final[Dict[int, str]] = {
+    0: "IDLE",
+    1: "MOVING",
+    2: "ATTACKING",
+    3: "RESPAWNING",
+    99: "DESPAWNED"
 }
 
-# Physics constants for gravity calculations
-GRAVITY_MULTIPLIER: Final[float] = 9.81
-TERMINAL_VELOCITY: Final[float] = 50.0
+# Boundary dimensions for game world physics
+WORLD_BOUNDS: Final[Tuple[float, float, float]] = (1000.0, 1000.0, 500.0)
 
-def get_debug_mode_config(enabled: bool) -> Dict[str, bool]:
-    """
-    Returns engine configuration flags based on current state.
+def get_state_label(code: int) -> str:
+    """Return the human-readable label for a given numeric entity state."""
+    return ENTITY_STATES.get(code, "UNKNOWN_STATE")
 
-    Args:
-        enabled: Boolean indicating if debug logging is active.
+class GameConfig:
+    """Container for global environment constants with read-only enforcement."""
+    def __init__(self) -> None:
+        self._data: Dict[str, float] = {
+            "gravity": 9.81,
+            "friction": 0.05
+        }
 
-    Returns:
-        A dictionary containing state-specific engine flags.
-    """
-    return {
-        'show_hitboxes': enabled,
-        'log_network_jitter': enabled,
-        'stream_telemetry': True
-    }
+    def get_constant(self, key: str) -> float:
+        """Retrieve environmental constant value."""
+        return self._data.get(key, 0.0)
