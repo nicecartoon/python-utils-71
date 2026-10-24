@@ -1,33 +1,32 @@
 from typing import Optional, Any
 
-class GameEngineError(Exception):
-    """Base exception for all engine-specific failures."""
-    def __init__(self, message: str, context: Optional[dict[str, Any]] = None) -> None:
-        super().__init__(message)
-        self.context = context or {}
-
-class ResourceLoadError(GameEngineError):
-    """Raised when asset loading goes sideways."""
+class GamingEngineError(Exception):
+    """Base exception for all engine-related malfunctions."""
     pass
 
-class StateTransitionError(GameEngineError):
-    """Raised during illegal game state shifts."""
-    pass
+class AssetLoadError(GamingEngineError):
+    """Raised when game assets fail to materialize in memory."""
+    def __init__(self, asset_id: str, reason: Optional[str] = None) -> None:
+        self.asset_id = asset_id
+        self.reason = reason
+        super().__init__(f"Asset {asset_id} failed: {reason or 'unknown cause'}")
 
-def handle_critical_error(err: Exception) -> str:
-    """Transform complex exception objects into printable status strings."""
-    if isinstance(err, GameEngineError):
-        ctx = "; ".join(f"{k}={v}" for k, v in err.context.items())
-        return f"[FATAL] {type(err).__name__}: {err} ({ctx})"
-    return f"[UNKNOWN] {str(err)}"
+class StateCorruptionError(GamingEngineError):
+    """Raised when game state violates temporal physics."""
+    def __init__(self, state_name: str, current_value: Any) -> None:
+        self.state_name = state_name
+        self.current_value = current_value
+        super().__init__(f"Invalid state {state_name} detected: {current_value!r}")
 
-class EngineGuard:
-    """Context manager for suppressing engine-wide hiccups."""
-    def __enter__(self) -> None:
-        pass
+def raise_if_none(value: Any, error_class: type[Exception], message: str) -> None:
+    """Utility for aggressive null-checking in game loops."""
+    if value is None:
+        raise error_class(message)
 
-    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> bool:
-        if exc_type and issubclass(exc_type, GameEngineError):
-            print(f"Caught handled game exception: {exc_val}")
-            return True
-        return False
+def report_telemetry(exc: Exception) -> dict[str, str]:
+    """Standardized exception formatting for game logs."""
+    return {
+        "error_type": exc.__class__.__name__,
+        "trace": str(exc),
+        "severity": "critical"
+    }
