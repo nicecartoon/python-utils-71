@@ -1,59 +1,59 @@
-import logging
 import os
+import sys
+import logging
 from logging.handlers import RotatingFileHandler
-
-GAME_LOG_LEVELS = {
-    "COMBAT": 25,
-    "QUEST": 26,
-    "TELEMETRY": 15,
-}
-
-for name, level in GAME_LOG_LEVELS.items():
-    logging.addLevelName(level, name)
+from typing import Optional
 
 
-class GameHudFormatter(logging.Formatter):
-    COLORS = {
-        "COMBAT": "\u001b[91m",
-        "QUEST": "\u001b[93m",
-        "TELEMETRY": "\u001b[94m",
-        "WARNING": "\u001b[33m",
-        "ERROR": "\u001b[31m",
+class RpgRarityFormatter(logging.Formatter):
+    """Custom formatter mapping log severity to gaming loot rarity tiers."""
+
+    RARITY_TIERS = {
+        logging.DEBUG: "[COMMON]",
+        logging.INFO: "[UNCOMMON]",
+        logging.WARNING: "[RARE]",
+        logging.ERROR: "[EPIC]",
+        logging.CRITICAL: "[LEGENDARY]",
     }
-    RESET = "\u001b[0m"
 
     def format(self, record: logging.LogRecord) -> str:
-        color = self.COLORS.get(record.levelname, "")
-        reset = self.RESET if color else ""
-        session_tick = getattr(record, "tick", 0)
-        formatted_msg = super().format(record)
-        return f"{color}[TICK:{session_tick:08d}] [{record.levelname}] {formatted_msg}{reset}"
+        tier = self.RARITY_TIERS.get(record.levelno, "[TRASH]")
+        record.rarity = f"{tier:<11}"
+        return super().format(record)
 
 
 def setup_game_logger(
-    name: str = "game_engine",
-    log_file: str = "logs/game_session.log",
-    max_bytes: int = 1048576,
-    backup_count: int = 5,
-    level: int = logging.DEBUG,
+    logger_name: str = "game_session",
+    log_dir: str = "logs",
+    max_kb: int = 512,
+    backup_count: int = 3,
+    level: int = logging.INFO,
 ) -> logging.Logger:
-    os.makedirs(os.path.dirname(log_file), exist_ok=True)
+    """Configures a rotating log handler tailored for tracking game events."""
+    os.makedirs(log_dir, exist_ok=True)
+    log_path = os.path.join(log_dir, f"{logger_name}.log")
 
-    logger = logging.getLogger(name)
+    logger = logging.getLogger(logger_name)
     logger.setLevel(level)
-    logger.handlers.clear()
+    logger.propagate = False
 
+    if logger.hasHandlers():
+        return logger
+
+    # Size-based rotation (convert KB to bytes)
     file_handler = RotatingFileHandler(
-        log_file, maxBytes=max_bytes, backupCount=backup_count, encoding="utf-8"
+        log_path,
+        maxBytes=max_kb * 1024,
+        backupCount=backup_count,
+        encoding="utf-8",
     )
-    file_formatter = logging.Formatter(
-        "%(asctime)s [%(levelname)s] (%(filename)s:%(lineno)d) - %(message)s"
-    )
-    file_handler.setFormatter(file_formatter)
+    file_fmt = "%(asctime)s %(rarity)s (%(name)s) %(message)s"
+    file_handler.setFormatter(RpgRarityFormatter(fmt=file_fmt, datefmt="%H:%M:%S"))
     logger.addHandler(file_handler)
 
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(GameHudFormatter("%(message)s"))
-    logger.addHandler(console_handler)
+    stream_handler = logging.StreamHandler(sys.stdout)
+    stream_fmt = "%(rarity)s %(message)s"
+    stream_handler.setFormatter(RpgRarityFormatter(fmt=stream_fmt))
+    logger.addHandler(stream_handler)
 
     return logger
