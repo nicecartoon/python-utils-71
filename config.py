@@ -1,35 +1,66 @@
-import os
 import json
-import logging
+import os
+from typing import Any, Dict
 
-class ConfigLoader:
-    def __init__(self, path='settings.json'):
-        self.path = path
-        self.data = {}
+DEFAULT_GAMING_CONFIG: Dict[str, Any] = {
+    "graphics": {
+        "resolution": "1920x1080",
+        "fps_limit": 144,
+        "vsync": True,
+        "fov": 90.0,
+    },
+    "audio": {
+        "master_volume": 0.8,
+        "sfx_volume": 1.0,
+        "music_volume": 0.5,
+        "mute_in_background": True,
+    },
+    "controls": {
+        "mouse_sensitivity": 1.2,
+        "invert_y": False,
+        "keybinds": {"jump": "space", "crouch": "c", "interact": "e"},
+    },
+    "debug": {"show_fps": False, "god_mode": False},
+}
 
-    def load_gaming_profile(self):
+
+class ConfigNode:
+    """Wrapper enabling dot-notation and dynamic default fallback for game settings."""
+
+    def __init__(self, data: Dict[str, Any], defaults: Dict[str, Any] = None):
+        self._data = data
+        self._defaults = defaults or {}
+
+    def __getattr__(self, name: str) -> Any:
+        if name in self._data:
+            val = self._data[name]
+            def_val = self._defaults.get(name)
+        elif name in self._defaults:
+            val = self._defaults[name]
+            def_val = val
+        else:
+            raise AttributeError(f"Configuration key '{name}' not found.")
+
+        if isinstance(val, dict):
+            return ConfigNode(val, def_val if isinstance(def_val, dict) else {})
+        return val
+
+    def get(self, key: str, fallback: Any = None) -> Any:
         try:
-            if not os.path.exists(self.path):
-                raise FileNotFoundError('Config missing, defaulting to console mode')
-            with open(self.path, 'r') as f:
-                self.data = json.load(f)
-        except (json.JSONDecodeError, FileNotFoundError) as e:
-            logging.warning(f'Config fault: {e}. Using fallback defaults.')
-            self.data = {'fps_cap': 60, 'vsync': True, 'mode': 'safe'}
-        return self.data
-
-    def get_setting(self, key, default):
-        try:
-            return self.data.get(key, default)
+            return getattr(self, key)
         except AttributeError:
-            return default
+            return fallback
 
-    def validate_performance(self):
-        if self.data.get('fps_cap', 0) < 30:
-            self.data['fps_cap'] = 30
-            print('Warning: Performance floor triggered')
-        return True
 
-# Global config singleton for gaming session
-config_manager = ConfigLoader()
-config_manager.load_gaming_profile()
+class GameConfigLoader:
+    """Loads game configuration files with fallback to preset gaming defaults."""
+
+    def __init__(self, default_config: Dict[str, Any] = None):
+        self.defaults = default_config or DEFAULT_GAMING_CONFIG
+
+    def load_from_file(self, filepath: str) -> ConfigNode:
+        loaded = {}
+        if os.path.exists(filepath):
+            with open(filepath, "r", encoding="utf-8") as f:
+                loaded = json.load(f)
+        return ConfigNode(loaded, self.defaults)
