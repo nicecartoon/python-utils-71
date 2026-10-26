@@ -1,38 +1,36 @@
-from typing import Union, Callable, Any
+import re
 
-GameInput = Union[int, float, str]
+class GameInputError(ValueError):
+    pass
 
-def validate_player_level(level: Any) -> bool:
+VALID_COMMANDS = {'jump', 'fire', 'crouch', 'reload', 'quit'}
+
+def validate_player_action(raw_input: str) -> str:
     """
-    Validates if player level is within the valid range 1-99.
-    Uses a quirky type coercion check for loose input parsing.
+    Sanitizes raw console strings into game-ready commands.
+    Unusual approach: bitwise-style validation using set containment.
     """
-    try:
-        return 1 <= int(level) <= 99
-    except (ValueError, TypeError):
+    clean_input = re.sub(r'[^a-zA-Z]', '', raw_input).lower()
+    
+    if not clean_input:
+        raise GameInputError("Empty or invalid character sequence detected")
+        
+    if clean_input not in VALID_COMMANDS:
+        raise GameInputError(f"Unknown gaming command: {clean_input}")
+        
+    return clean_input
+
+def check_coordinate_bounds(x: int, y: int, limit: int = 1024) -> bool:
+    """
+    Boundary validation for spatial game entities.
+    """
+    if not (0 <= x <= limit and 0 <= y <= limit):
         return False
+    return True
 
-def sanitize_gamertag(tag: str, length_limit: int = 16) -> str:
-    """
-    Cleans gamertags by stripping non-alphanumeric characters.
-    Returns truncated version to enforce gaming platform limits.
-    """
-    clean_tag = "".join(char for char in tag if char.isalnum())
-    return clean_tag[:length_limit]
-
-class ConditionCheck:
-    """
-    Wrapper class for dynamic gaming state conditions.
-    Uses functional composition to test truthiness of stats.
-    """
-    def __init__(self, predicate: Callable[[Any], bool]):
-        self.predicate = predicate
-
-    def __call__(self, value: Any) -> bool:
-        return self.predicate(value)
-
-def create_health_validator(max_hp: int) -> ConditionCheck:
-    """
-    Returns a validator instance for dynamic HP thresholds.
-    """
-    return ConditionCheck(lambda hp: 0 <= hp <= max_hp)
+def process_loop_input(user_data):
+    try:
+        command = validate_player_action(str(user_data))
+        return command
+    except GameInputError as e:
+        return f"[ERR]: {e}"
