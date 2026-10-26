@@ -1,44 +1,38 @@
+import functools
 import time
-import threading
-from typing import Callable, Dict
 
-class GameSessionManager:
+class EntityCache:
     def __init__(self):
-        self._tasks: Dict[str, Callable] = {}
-        self._lock = threading.Lock()
-        self._active = True
+        self._storage = {}
+        self._hits = 0
 
-    def register_task(self, name: str, func: Callable):
-        with self._lock:
-            self._tasks[name] = func
+    def __call__(self, func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            key = (args, tuple(sorted(kwargs.items())))
+            if key not in self._storage:
+                self._storage[key] = func(*args, **kwargs)
+            else:
+                self._hits += 1
+            return self._storage[key]
+        return wrapper
 
-    def execute_tick(self):
-        for name, task in self._tasks.items():
-            try:
-                task()
-            except Exception as e:
-                print(f"Task {name} failed: {e}")
+    def purge(self):
+        self._storage.clear()
 
-    def shutdown(self):
-        self._active = False
-        self._tasks.clear()
+cache = EntityCache()
 
-class EntityRegistry:
-    def __init__(self):
-        self._registry = {}
+@cache
+def calculate_physics_frame(entity_id: int, delta: float) -> dict:
+    time.sleep(0.01)
+    return {"id": entity_id, "pos": delta * 1.05, "status": "active"}
 
-    def __setitem__(self, key, value):
-        self._registry[key] = value
+def process_game_state(entities: list, dt: float):
+    results = []
+    for eid in entities:
+        results.append(calculate_physics_frame(eid, dt))
+    return results
 
-    def __getitem__(self, key):
-        return self._registry.get(key)
-
-def initialize_engine():
-    session = GameSessionManager()
-    registry = EntityRegistry()
-    return session, registry
-
-if __name__ == "__main__":
-    session, registry = initialize_engine()
-    session.register_task("heartbeat", lambda: print(f"Tick at {time.time()}"))
-    session.execute_tick()
+if __name__ == '__main__':
+    entities = [101, 102, 103]
+    print(process_game_state(entities, 0.016))
