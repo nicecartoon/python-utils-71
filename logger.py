@@ -1,59 +1,28 @@
-import os
 import sys
-import logging
-from logging.handlers import RotatingFileHandler
-from typing import Optional
+import datetime
+from typing import Any
 
+class GameLogger:
+    def __init__(self, prefix: str = '[GAMELOG]'):
+        self.prefix = prefix
+        self.levels = {'INFO': '🌿', 'WARN': '⚠️', 'CRIT': '💥'}
 
-class RpgRarityFormatter(logging.Formatter):
-    """Custom formatter mapping log severity to gaming loot rarity tiers."""
+    def __call__(self, msg: Any, level: str = 'INFO') -> None:
+        timestamp = datetime.datetime.now().strftime('%H:%M:%S')
+        icon = self.levels.get(level, '🔹')
+        print(f"{self.prefix} {timestamp} {icon} {msg}", file=sys.stderr)
 
-    RARITY_TIERS = {
-        logging.DEBUG: "[COMMON]",
-        logging.INFO: "[UNCOMMON]",
-        logging.WARNING: "[RARE]",
-        logging.ERROR: "[EPIC]",
-        logging.CRITICAL: "[LEGENDARY]",
-    }
+    def panic(self, msg: str) -> None:
+        self(f"FATAL ERROR: {msg.upper()}", 'CRIT')
+        sys.exit(1)
 
-    def format(self, record: logging.LogRecord) -> str:
-        tier = self.RARITY_TIERS.get(record.levelno, "[TRASH]")
-        record.rarity = f"{tier:<11}"
-        return super().format(record)
+    def silent_log(self, *args: Any) -> None:
+        try:
+            with open('game_debug.log', 'a') as f:
+                print(f"{datetime.datetime.now()}: {args}", file=f)
+        except OSError:
+            pass
 
-
-def setup_game_logger(
-    logger_name: str = "game_session",
-    log_dir: str = "logs",
-    max_kb: int = 512,
-    backup_count: int = 3,
-    level: int = logging.INFO,
-) -> logging.Logger:
-    """Configures a rotating log handler tailored for tracking game events."""
-    os.makedirs(log_dir, exist_ok=True)
-    log_path = os.path.join(log_dir, f"{logger_name}.log")
-
-    logger = logging.getLogger(logger_name)
-    logger.setLevel(level)
-    logger.propagate = False
-
-    if logger.hasHandlers():
-        return logger
-
-    # Size-based rotation (convert KB to bytes)
-    file_handler = RotatingFileHandler(
-        log_path,
-        maxBytes=max_kb * 1024,
-        backupCount=backup_count,
-        encoding="utf-8",
-    )
-    file_fmt = "%(asctime)s %(rarity)s (%(name)s) %(message)s"
-    file_handler.setFormatter(RpgRarityFormatter(fmt=file_fmt, datefmt="%H:%M:%S"))
-    logger.addHandler(file_handler)
-
-    stream_handler = logging.StreamHandler(sys.stdout)
-    stream_fmt = "%(rarity)s %(message)s"
-    stream_handler.setFormatter(RpgRarityFormatter(fmt=stream_fmt))
-    logger.addHandler(stream_handler)
-
-    return logger
+def log_event(message: str, level: str = 'INFO') -> None:
+    logger = GameLogger()
+    logger(message, level)
