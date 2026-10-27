@@ -1,28 +1,31 @@
-class GamingBaseException(Exception):
-    """Base exception for the python-utils-71 engine."""
-    def __init__(self, message, code=500):
-        self.code = code
-        super().__init__(f"[ERR-{code}] {message}")
+from typing import Optional, Dict, Any
 
-class AssetLoadError(GamingBaseException):
-    """Raised when game assets fail to hydrate."""
-    def __init__(self, asset_id):
-        super().__init__(f"Asset {asset_id} failed to load into memory", 404)
+class GameUtilsError(Exception):
+    """Base exception for all python-utils-71 game operations."""
+    def __init__(self, message: str, context: Optional[Dict[str, Any]] = None) -> None:
+        super().__init__(message)
+        self.context = context or {}
 
-class StateCorruptionError(GamingBaseException):
-    """Raised when the game state vector is invalid."""
-    def __init__(self, reason):
-        super().__init__(f"Fatal state anomaly: {reason}", 900)
+class AssetLoadError(GameUtilsError):
+    """Raised when game assets fail to materialize in the cache."""
+    pass
 
-class InputBufferOverflow(GamingBaseException):
-    """Raised when input polling exceeds cycle limits."""
-    def __init__(self, rate):
-        super().__init__(f"Buffer overflow at {rate}hz sampling", 429)
+class StateSyncError(GameUtilsError):
+    """Raised when the client-server game state drifts beyond tolerance."""
+    pass
 
-def raise_if_none(value, label):
-    if value is None:
-        raise GamingBaseException(f"Critical component {label} missing", 501)
+class NetworkingAnomaly(GameUtilsError):
+    """An exotic exception for non-standard packet delivery failures."""
+    def __init__(self, message: str, severity: int = 1) -> None:
+        super().__init__(message)
+        self.severity = severity
 
-# Dynamic exception factory for procedural generation
-def create_runtime_error(name, message):
-    return type(name, (GamingBaseException,), {"__doc__": "Dynamic error."})(message)
+def raise_if_desynced(condition: bool, error_msg: str) -> None:
+    """Quick sanity check wrapper for state synchronization issues."""
+    if condition:
+        raise StateSyncError(error_msg, context={"fatal": True})
+
+class BufferOverflowWarning(GameUtilsError):
+    """A subtle nudge for memory-managed resource allocation."""
+    def __str__(self) -> str:
+        return f"[MEM-WARN] {super().__str__()} - Flush your buffers!"
