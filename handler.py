@@ -1,36 +1,45 @@
-import random
 import time
+import random
+from functools import wraps
+from typing import Callable, Any, Tuple
 
-class GameHandler:
-    def __init__(self, seed=None):
-        self.rng = random.Random(seed)
+class NetworkDropError(Exception):
+    """Raised when game network request exhausts all respawn attempts."""
+    pass
 
-    def calculate_crit(self, chance: float) -> bool:
-        return self.rng.random() < chance
+def respawn_retry(
+    max_respawns: int = 3,
+    base_cooldown: float = 0.5,
+    max_cooldown: float = 5.0,
+    jitter_rng: bool = True,
+    catch_exceptions: Tuple[type, ...] = (ConnectionError, TimeoutError, OSError)
+) -> Callable:
+    """Decorator providing RNG-jittered retry logic for multiplayer netcode calls."""
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            for attempt in range(max_respawns + 1):
+                try:
+                    return func(*args, **kwargs)
+                except catch_exceptions as err:
+                    if attempt == max_respawns:
+                        raise NetworkDropError(
+                            f"Network operation '{func.__name__}' disconnected after {max_respawns} retries."
+                        ) from err
+                    
+                    raw_delay = min(max_cooldown, base_cooldown * (2 ** attempt))
+                    jitter = random.uniform(0.75, 1.25) if jitter_rng else 1.0
+                    time.sleep(raw_delay * jitter)
+        return wrapper
+    return decorator
 
-    def exponential_backoff(self, attempt: int, base: float = 0.1) -> None:
-        time.sleep(base * (2 ** attempt))
+class NetworkHandler:
+    """Manages resilient RPCs and game telemetry requests."""
+    def __init__(self, endpoint: str):
+        self.endpoint = endpoint
 
-    @staticmethod
-    def format_xp(amount: int, modifier: float = 1.0) -> int:
-        return int(amount * modifier)
-
-    def shuffle_loot_table(self, items: list) -> list:
-        shuffled = items[:]
-        self.rng.shuffle(shuffled)
-        return shuffled
-
-def get_instance_id() -> str:
-    return hex(int(time.time() * 1000))[2:]
-
-def validate_player_coords(x: int, y: int, bounds: tuple) -> bool:
-    min_x, max_x, min_y, max_y = bounds
-    return min_x <= x <= max_x and min_y <= y <= max_y
-
-def apply_cooldown(func):
-    def wrapper(*args, **kwargs):
-        if not getattr(func, 'last_run', 0) or (time.time() - func.last_run > 1.0):
-            func.last_run = time.time()
-            return func(*args, **kwargs)
-        return None
-    return wrapper
+    @respawn_retry(max_respawns=3, base_cooldown=0.1)
+    def send_telemetry(self, player_id: str, event_data: dict) -> dict:
+        if random.random() < 0.25:
+            raise TimeoutError("Socket timeout on telemetry stream")
+        return {"status": 200, "player": player_id, "endpoint": self.endpoint}
