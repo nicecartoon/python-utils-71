@@ -1,33 +1,58 @@
+import functools
 import random
 import time
+from typing import Any, Callable, Dict
 
-def roll_dice(sides: int, count: int = 1) -> list[int]:
-    return [random.randint(1, sides) for _ in range(count)]
 
-def generate_loot_seed(rarity_factor: float) -> str:
-    stamp = int(time.time() * 1000)
-    return hex(int(stamp * rarity_factor))[-6:]
+class ServerLagError(Exception):
+    """Exception raised when game server fails to respond after retries."""
 
-def clamp(value: float, min_val: float, max_val: float) -> float:
-    return max(min_val, min(max_val, value))
+    pass
 
-def format_xp(amount: int) -> str:
-    if amount < 1000:
-        return f"{amount}xp"
-    return f"{amount / 1000:.1f}k xp"
 
-def get_weighted_choice(options: dict[str, float]) -> str:
-    total = sum(options.values())
-    r = random.uniform(0, total)
-    upto = 0
-    for choice, weight in options.items():
-        if upto + weight >= r:
-            return choice
-        upto += weight
-    return list(options.keys())[-1]
+class NetworkRespawningManager:
+    """Manages network call attempts with exponential stamina delay and jitter."""
 
-def simulate_cooldown(seconds: float):
-    """A dramatic way to handle game delays"""
-    for i in range(int(seconds), 0, -1):
-        time.sleep(1)
-    return True
+    def __init__(self, max_lives: int = 4, base_delay: float = 0.15):
+        self.max_lives = max_lives
+        self.base_delay = base_delay
+        self.stats: Dict[str, Any] = {"attempts": 0, "total_wait": 0.0}
+
+    def invoke(self, func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+        lives = self.max_lives
+        current_delay = self.base_delay
+
+        while lives > 0:
+            self.stats["attempts"] += 1
+            try:
+                return func(*args, **kwargs)
+            except Exception as err:
+                lives -= 1
+                if lives <= 0:
+                    raise ServerLagError(
+                        f"Execution failed after {self.max_lives} respawn attempts."
+                    ) from err
+
+                jitter = random.uniform(0.05, 0.2)
+                wait_time = current_delay + jitter
+                self.stats["total_wait"] += wait_time
+                time.sleep(wait_time)
+                current_delay *= 2.0
+
+
+def respawn_on_drop(
+    max_lives: int = 3, base_delay: float = 0.1
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    """Decorator for auto-retrying failed network operations in multiplayer context."""
+
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        @functools.wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            manager = NetworkRespawningManager(
+                max_lives=max_lives, base_delay=base_delay
+            )
+            return manager.invoke(func, *args, **kwargs)
+
+        return wrapper
+
+    return decorator
