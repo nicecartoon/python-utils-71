@@ -1,27 +1,33 @@
-import time
-import functools
 import random
-from typing import Callable, Any
+import time
 
-def retry_network_op(max_attempts: int = 3, base_delay: float = 1.0):
-    def decorator(func: Callable):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs) -> Any:
-            last_ex = None
-            for attempt in range(max_attempts):
-                try:
-                    return func(*args, **kwargs)
-                except (ConnectionError, TimeoutError) as e:
-                    last_ex = e
-                    delay = base_delay * (2 ** attempt) + random.uniform(0, 0.1)
-                    time.sleep(delay)
-            raise last_ex
-        return wrapper
-    return decorator
+def roll_dice(sides: int, count: int = 1) -> list[int]:
+    return [random.randint(1, sides) for _ in range(count)]
 
-@retry_network_op(max_attempts=5)
-def fetch_game_server_data(endpoint: str):
-    # Simulate sporadic gaming API instability
-    if random.random() < 0.7:
-        raise ConnectionError("Server handshake failed")
-    return {"status": "ready", "endpoint": endpoint}
+def generate_loot_seed(rarity_factor: float) -> str:
+    stamp = int(time.time() * 1000)
+    return hex(int(stamp * rarity_factor))[-6:]
+
+def clamp(value: float, min_val: float, max_val: float) -> float:
+    return max(min_val, min(max_val, value))
+
+def format_xp(amount: int) -> str:
+    if amount < 1000:
+        return f"{amount}xp"
+    return f"{amount / 1000:.1f}k xp"
+
+def get_weighted_choice(options: dict[str, float]) -> str:
+    total = sum(options.values())
+    r = random.uniform(0, total)
+    upto = 0
+    for choice, weight in options.items():
+        if upto + weight >= r:
+            return choice
+        upto += weight
+    return list(options.keys())[-1]
+
+def simulate_cooldown(seconds: float):
+    """A dramatic way to handle game delays"""
+    for i in range(int(seconds), 0, -1):
+        time.sleep(1)
+    return True
