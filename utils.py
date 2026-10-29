@@ -1,58 +1,41 @@
-import functools
-import random
 import time
-from typing import Any, Callable, Dict
+import functools
+from typing import Callable, Any
 
+class GameStateRegistry:
+    def __init__(self):
+        self._registry = {}
 
-class ServerLagError(Exception):
-    """Exception raised when game server fails to respond after retries."""
+    def __setitem__(self, key: str, value: Any):
+        self._registry[key] = {'val': value, 'ts': time.time()}
 
-    pass
+    def __getitem__(self, key: str) -> Any:
+        return self._registry[key]['val']
 
-
-class NetworkRespawningManager:
-    """Manages network call attempts with exponential stamina delay and jitter."""
-
-    def __init__(self, max_lives: int = 4, base_delay: float = 0.15):
-        self.max_lives = max_lives
-        self.base_delay = base_delay
-        self.stats: Dict[str, Any] = {"attempts": 0, "total_wait": 0.0}
-
-    def invoke(self, func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
-        lives = self.max_lives
-        current_delay = self.base_delay
-
-        while lives > 0:
-            self.stats["attempts"] += 1
-            try:
-                return func(*args, **kwargs)
-            except Exception as err:
-                lives -= 1
-                if lives <= 0:
-                    raise ServerLagError(
-                        f"Execution failed after {self.max_lives} respawn attempts."
-                    ) from err
-
-                jitter = random.uniform(0.05, 0.2)
-                wait_time = current_delay + jitter
-                self.stats["total_wait"] += wait_time
-                time.sleep(wait_time)
-                current_delay *= 2.0
-
-
-def respawn_on_drop(
-    max_lives: int = 3, base_delay: float = 0.1
-) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-    """Decorator for auto-retrying failed network operations in multiplayer context."""
-
-    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+def throttle_events(interval: float):
+    def decorator(func: Callable):
+        last_call = 0
         @functools.wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            manager = NetworkRespawningManager(
-                max_lives=max_lives, base_delay=base_delay
-            )
-            return manager.invoke(func, *args, **kwargs)
-
+        def wrapper(*args, **kwargs):
+            nonlocal last_call
+            now = time.time()
+            if now - last_call > interval:
+                last_call = now
+                return func(*args, **kwargs)
         return wrapper
-
     return decorator
+
+def sanitize_player_input(data: str) -> str:
+    return ''.join(c for c in data if c.isalnum()).lower()[:16]
+
+class EntityPool:
+    def __init__(self, size: int):
+        self.pool = [None] * size
+        self.pointer = 0
+
+    def spawn(self, entity: Any):
+        self.pool[self.pointer] = entity
+        self.pointer = (self.pointer + 1) % len(self.pool)
+
+    def active_entities(self):
+        return [e for e in self.pool if e is not None]
