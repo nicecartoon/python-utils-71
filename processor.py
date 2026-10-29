@@ -1,36 +1,57 @@
-import logging
-from typing import Any, Dict
+import math
+from typing import Dict, Any
 
-class InputProcessor:
-    def __init__(self):
-        self.logger = logging.getLogger('game_engine')
-        self.allowed_keys = {'jump', 'shoot', 'crouch', 'move_x', 'move_y'}
 
-    def validate_packet(self, packet: Dict[str, Any]) -> bool:
-        if not isinstance(packet, dict):
-            return False
-        if not all(k in self.allowed_keys for k in packet.keys()):
-            return False
-        return True
+class GlitchRecoveryManager:
+    """Handles edge cases in game physics and stats by auto-correcting corrupted data."""
 
-    def process_loop(self, stream: list):
-        """Main gaming loop with creative sanity checks."""
-        for tick, packet in enumerate(stream):
-            try:
-                if not self.validate_packet(packet):
-                    raise ValueError(f"Malicious or corrupt input at tick {tick}")
-                
-                # Execute game logic
-                self._apply_action(packet)
-            except Exception as e:
-                self.logger.error(f"Invalid packet sequence detected: {e}")
-                continue
+    def __init__(self, spawn_point: tuple = (0.0, 0.0)):
+        self.spawn_point = spawn_point
+        self.glitch_log: list[str] = []
 
-    def _apply_action(self, action: Dict[str, Any]):
-        # Simulation of game engine action application
-        pass
+    def sanitize_entity(self, entity: Dict[str, Any]) -> Dict[str, Any]:
+        """Process entity state and patch anomalous or corrupted values."""
+        try:
+            x, y = entity.get("position", self.spawn_point)
+            if not (math.isfinite(x) and math.isfinite(y)):
+                entity["position"] = self.spawn_point
+                self.glitch_log.append(f"Entity '{entity.get('id', 'unknown')}' coordinate reset.")
 
-if __name__ == '__main__':
-    engine = InputProcessor()
-    test_stream = [{'jump': True}, {'dance': True}, {'shoot': False}]
-    engine.process_loop(test_stream)
+            hp = entity.get("hp", 100)
+            max_hp = max(1, entity.get("max_hp", 100))
+            if isinstance(hp, (int, float)):
+                if math.isnan(hp) or hp < 0:
+                    entity["hp"] = 0
+                elif hp > max_hp * 10:
+                    entity["hp"] = max_hp
+            else:
+                entity["hp"] = max_hp
+
+            inventory = entity.get("inventory", {})
+            for item, count in list(inventory.items()):
+                if not isinstance(count, int) or count <= 0:
+                    del inventory[item]
+                    self.glitch_log.append(f"Purged ghost item '{item}' from entity.")
+
+        except Exception as err:
+            entity.update({"position": self.spawn_point, "hp": 100, "inventory": {}})
+            self.glitch_log.append(f"Critical state reset triggered: {err}")
+
+        return entity
+
+
+def safe_damage_calculator(
+    attacker_power: float, defender_armor: float, multiplier: float = 1.0
+) -> int:
+    """Calculate damage while safely mitigating divide-by-zero, NaN, and float overflow."""
+    try:
+        if any(not math.isfinite(v) for v in (attacker_power, defender_armor, multiplier)):
+            return 0
+
+        armor_effective = max(0.0, defender_armor)
+        base_damage = max(0.0, attacker_power - (armor_effective * 0.5))
+        final_damage = base_damage * max(0.0, multiplier)
+
+        return min(999999, int(math.floor(final_damage)))
+    except (TypeError, ValueError, OverflowError):
+        return 0
