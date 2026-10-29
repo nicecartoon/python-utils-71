@@ -1,34 +1,39 @@
-import zlib
-import base64
-import json
-from typing import Any, Dict
+import time
+import logging
+from typing import Dict, Any, Optional
 
-class GameStateCodec:
-    """Binary-heavy state packer for memory-constrained game states."""
-    @staticmethod
-    def pack_state(data: Dict[str, Any]) -> str:
-        raw = json.dumps(data, separators=(',', ':')).encode('utf-8')
-        compressed = zlib.compress(raw, level=9)
-        return base64.b64encode(compressed).decode('ascii')
+class GameEventHandler:
+    def __init__(self, buffer_size: int = 1024):
+        self.buffer = []
+        self.max_size = buffer_size
+        self.logger = logging.getLogger('game_handler')
 
-    @staticmethod
-    def unpack_state(blob: str) -> Dict[str, Any]:
-        try:
-            raw = base64.b64decode(blob.encode('ascii'))
-            decompressed = zlib.decompress(raw)
-            return json.loads(decompressed.decode('utf-8'))
-        except (zlib.error, ValueError, binascii.Error) as e:
-            return {"error": "corrupt_payload", "details": str(e)}
+    def ingest(self, event: Dict[str, Any]) -> None:
+        event['timestamp'] = time.time()
+        self.buffer.append(event)
+        if len(self.buffer) > self.max_size:
+            self.buffer.pop(0)
 
-def process_player_stats(stats: Dict[str, Any]) -> str:
-    """Compresses player telemetry into efficient base64 strings."""
-    codec = GameStateCodec()
-    # Filtering metadata for transmission efficiency
-    payload = {k: v for k, v in stats.items() if isinstance(v, (int, float, str))}
-    return codec.pack_state(payload)
+    def process_queue(self, callback: callable) -> None:
+        while self.buffer:
+            evt = self.buffer.pop(0)
+            try:
+                callback(evt)
+            except Exception as e:
+                self.logger.error(f'event processing failure: {e}')
 
-# Example usage demonstration
+    def get_snapshot(self) -> Dict[str, Any]:
+        return {
+            'count': len(self.buffer),
+            'latest': self.buffer[-1] if self.buffer else None,
+            'status': 'nominal'
+        }
+
+def setup_event_bridge(handler: GameEventHandler, data: list):
+    for item in data:
+        handler.ingest(item)
+
 if __name__ == '__main__':
-    mock_stats = {"lvl": 71, "xp": 9999, "item": "mythic_sword", "pos": [120, 45, 90]}
-    blob = process_player_stats(mock_stats)
-    print(f"Encoded State: {blob}")
+    h = GameEventHandler()
+    setup_event_bridge(h, [{'type': 'spawn', 'id': 1}, {'type': 'move', 'x': 10}])
+    h.process_queue(lambda x: print(f'event dispatched: {x["type"]}'))
