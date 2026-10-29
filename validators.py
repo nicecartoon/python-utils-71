@@ -1,36 +1,33 @@
-import re
+import time
+import random
+from functools import wraps
 
-class GameInputError(ValueError):
-    pass
+def retry_network_op(max_attempts=3, backoff=0.5):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            attempts = 0
+            while attempts < max_attempts:
+                try:
+                    return func(*args, **kwargs)
+                except (ConnectionError, TimeoutError) as e:
+                    attempts += 1
+                    if attempts >= max_attempts:
+                        raise e
+                    sleep_time = backoff * (2 ** (attempts - 1)) + random.uniform(0, 0.1)
+                    time.sleep(sleep_time)
+            return None
+        return wrapper
+    return decorator
 
-VALID_COMMANDS = {'jump', 'fire', 'crouch', 'reload', 'quit'}
+class NetworkValidator:
+    def __init__(self, ping_timeout=5.0):
+        self.ping_timeout = ping_timeout
 
-def validate_player_action(raw_input: str) -> str:
-    """
-    Sanitizes raw console strings into game-ready commands.
-    Unusual approach: bitwise-style validation using set containment.
-    """
-    clean_input = re.sub(r'[^a-zA-Z]', '', raw_input).lower()
-    
-    if not clean_input:
-        raise GameInputError("Empty or invalid character sequence detected")
-        
-    if clean_input not in VALID_COMMANDS:
-        raise GameInputError(f"Unknown gaming command: {clean_input}")
-        
-    return clean_input
-
-def check_coordinate_bounds(x: int, y: int, limit: int = 1024) -> bool:
-    """
-    Boundary validation for spatial game entities.
-    """
-    if not (0 <= x <= limit and 0 <= y <= limit):
-        return False
-    return True
-
-def process_loop_input(user_data):
-    try:
-        command = validate_player_action(str(user_data))
-        return command
-    except GameInputError as e:
-        return f"[ERR]: {e}"
+    @retry_network_op(max_attempts=4)
+    def validate_connection(self, host):
+        if not host:
+            raise ValueError("invalid host address")
+        # Simulated gaming network check
+        print(f"pinging {host}...")
+        return True
