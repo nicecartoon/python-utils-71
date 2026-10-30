@@ -1,41 +1,42 @@
+import random
 import time
-import functools
-from typing import Callable, Any
 
-class GameStateRegistry:
-    def __init__(self):
-        self._registry = {}
+def roll_dice(sides: int = 6, count: int = 1) -> list:
+    return [random.randint(1, sides) for _ in range(count)]
 
-    def __setitem__(self, key: str, value: Any):
-        self._registry[key] = {'val': value, 'ts': time.time()}
+def calculate_dps(damage: float, duration: float) -> float:
+    return damage / duration if duration > 0 else 0.0
 
-    def __getitem__(self, key: str) -> Any:
-        return self._registry[key]['val']
-
-def throttle_events(interval: float):
-    def decorator(func: Callable):
-        last_call = 0
-        @functools.wraps(func)
+def throttle_action(interval: float):
+    last_called = 0.0
+    def decorator(func):
+        nonlocal last_called
         def wrapper(*args, **kwargs):
-            nonlocal last_call
+            nonlocal last_called
             now = time.time()
-            if now - last_call > interval:
-                last_call = now
+            if now - last_called >= interval:
+                last_called = now
                 return func(*args, **kwargs)
         return wrapper
     return decorator
 
-def sanitize_player_input(data: str) -> str:
-    return ''.join(c for c in data if c.isalnum()).lower()[:16]
+def paginate_inventory(items: list, size: int) -> list:
+    return [items[i:i + size] for i in range(0, len(items), size)]
 
-class EntityPool:
-    def __init__(self, size: int):
-        self.pool = [None] * size
-        self.pointer = 0
+def format_xp(xp: int) -> str:
+    if xp >= 1_000_000:
+        return f'{xp / 1_000_000:.2f}M XP'
+    if xp >= 1_000:
+        return f'{xp / 1_000:.1f}K XP'
+    return f'{xp} XP'
 
-    def spawn(self, entity: Any):
-        self.pool[self.pointer] = entity
-        self.pointer = (self.pointer + 1) % len(self.pool)
-
-    def active_entities(self):
-        return [e for e in self.pool if e is not None]
+class StatsCache:
+    def __init__(self):
+        self._data = {}
+    def update(self, key: str, val: any):
+        self._data[key] = {'v': val, 't': time.time()}
+    def get(self, key: str, expiry: float):
+        entry = self._data.get(key)
+        if entry and (time.time() - entry['t'] < expiry):
+            return entry['v']
+        return None
