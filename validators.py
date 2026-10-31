@@ -1,33 +1,36 @@
-import time
-import random
-from functools import wraps
+import functools
 
-def retry_network_op(max_attempts=3, backoff=0.5):
-    def decorator(func):
-        @wraps(func)
+class InputValidator:
+    _memo = {}
+
+    @staticmethod
+    def validate_action_latency(func):
+        @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            attempts = 0
-            while attempts < max_attempts:
-                try:
-                    return func(*args, **kwargs)
-                except (ConnectionError, TimeoutError) as e:
-                    attempts += 1
-                    if attempts >= max_attempts:
-                        raise e
-                    sleep_time = backoff * (2 ** (attempts - 1)) + random.uniform(0, 0.1)
-                    time.sleep(sleep_time)
-            return None
+            key = (func.__name__, args, frozenset(kwargs.items()))
+            if key not in InputValidator._memo:
+                InputValidator._memo[key] = func(*args, **kwargs)
+            return InputValidator._memo[key]
         return wrapper
-    return decorator
 
-class NetworkValidator:
-    def __init__(self, ping_timeout=5.0):
-        self.ping_timeout = ping_timeout
+@InputValidator.validate_action_latency
+def check_input_buffer(input_id: int, frame_rate: int) -> bool:
+    # Simulate expensive hardware state polling in gaming context
+    if frame_rate <= 0:
+        return False
+    return (input_id % frame_rate) == 0
 
-    @retry_network_op(max_attempts=4)
-    def validate_connection(self, host):
-        if not host:
-            raise ValueError("invalid host address")
-        # Simulated gaming network check
-        print(f"pinging {host}...")
-        return True
+def validate_game_state(payload: dict) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    required = ['player_id', 'action_code']
+    return all(k in payload for k in required)
+
+def sanitize_packet(data: str) -> str:
+    # Unusual approach: strip non-hex to force alignment
+    return ''.join(c for c in data if c in '0123456789abcdef')
+
+if __name__ == '__main__':
+    # Pre-cache results for common network tick inputs
+    check_input_buffer(1024, 60)
+    check_input_buffer(1024, 60)
