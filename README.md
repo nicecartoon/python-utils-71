@@ -1,47 +1,53 @@
 # python-utils-71
 
-A lightweight collection of Python utilities designed to streamline gaming development, API integrations, and asset management. This toolkit focuses on high-performance data parsing and memory-efficient automation for game engines and discord-based game clients.
+A lightweight collection of Python utilities designed to streamline game development workflows and automate repetitive data processing tasks. This toolkit simplifies common challenges such as asset batch-processing, custom binary serialization, and integration with popular game engine APIs.
 
 ## Features
 
-*   **Steam Web API Wrapper**: Simplify user authentication, inventory fetching, and game status tracking with minimal boilerplate.
-*   **Log Parser**: High-speed regex engine for analyzing `.log` files from Unreal Engine or Unity, perfect for debugging session crashes.
-*   **Asset Hashing**: Quickly verify integrity of large game assets using optimized CRC32 and SHA-256 batch processing.
-*   **Memory Controller**: Cross-platform memory access utilities for monitoring process performance metrics during live gameplay.
+*   **Asset Batch Processor:** Recursively compress textures and optimize sprite sheets to reduce build sizes without sacrificing visual fidelity.
+*   **Binary Data Marshaller:** Fast, structure-aligned binary serialization for custom file formats, ideal for high-performance save systems.
+*   **Loot Table Engine:** A robust, weight-based random generation utility supporting complex conditional drops and probability modifiers.
+*   **Engine API Bridge:** Simplified wrappers for interacting with common game engine SDKs, minimizing boilerplate code for data synchronization.
 
 ## Installation
 
-Install the package via pip:
+Install `python-utils-71` via pip:
 
 ```bash
 pip install python-utils-71
 ```
 
-For development mode, clone the repository and run:
+For local development and testing, clone the repository and install the dependencies:
 
 ```bash
 git clone https://github.com/Developer/python-utils-71.git
 cd python-utils-71
-pip install -e .
+pip install -r requirements.txt
 ```
 
 ## Usage
 
-Easily integrate the Steam API handler into your project to track player stats:
+Below is a quick example of how to use the Loot Table engine to handle drop mechanics for your game:
 
 ```python
-from utils_71.steam import SteamClient
+from utils_71.gaming import LootTable
 
-# Initialize client
-client = SteamClient(api_key="YOUR_STEAM_API_KEY")
+# Define a loot table with weight-based probabilities
+items = {
+    "Health Potion": 50,
+    "Iron Sword": 10,
+    "Legendary Cape": 1
+}
 
-# Fetch recent game playtime
-playtime = client.get_recent_playtime(steam_id="76561198012345678")
-print(f"Total minutes played in last 2 weeks: {playtime}")
+loot_engine = LootTable(items)
+
+# Roll for a random drop
+result = loot_engine.roll()
+print(f"Player acquired: {result}")
 ```
 
 ## License
 
-![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Distributed under the MIT License. See `LICENSE` for more information.
